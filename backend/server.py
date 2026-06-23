@@ -319,6 +319,8 @@ async def billing_status(session_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=503, detail="Billing not configured")
     s = stripe.checkout.Session.retrieve(session_id)
     txn = await db.payment_transactions.find_one({"stripe_session_id": session_id})
+    if txn and txn.get("user_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Not your checkout session")
     paid = s.payment_status == "paid"
     if paid and txn and txn.get("status") != "paid":
         tier = (s.metadata or {}).get("tier") or (txn or {}).get("tier")
