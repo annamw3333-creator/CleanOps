@@ -16,12 +16,16 @@ export default function JobDetail() {
   const [job, setJob] = useState<any>(null);
   const [tab, setTab] = useState<"info" | "checklist">("info");
   const [busy, setBusy] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [reviewDone, setReviewDone] = useState<Record<string, boolean>>({});
   const isCleaner = user?.role === "cleaner";
+  const canApply = ["cleaner", "owner_cleaner", "admin"].includes(user?.role || "");
   const isAssigned = job?.assigned_cleaners?.includes(user?.user_id);
-  const isPoster = job?.poster_id === user?.user_id;
+  const isPoster = job?.poster_id === user?.user_id || user?.role === "admin";
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [cleaners, setCleaners] = useState<any[]>([]);
 
   const load = useCallback(async () => {
     try { setJob(await api.get(`/jobs/${id}`)); } catch {}
@@ -32,7 +36,14 @@ export default function JobDetail() {
 
   const act = async (fn: () => Promise<any>) => { setBusy(true); try { await fn(); await load(); } catch (e: any) { alert(e.message); } finally { setBusy(false); } };
   const apply = () => act(async () => { const r = await api.post(`/jobs/${id}/apply`); alert(r.auto_accepted ? "Auto-accepted! Job is yours." : "Application submitted."); });
-  const assign = (cid: string) => act(() => api.post(`/jobs/${id}/assign`, { cleaner_id: cid }));
+  const assign = (cid: string) => act(async () => { await api.post(`/jobs/${id}/assign`, { cleaner_id: cid }); setAssignOpen(false); });
+  const openAssign = async () => {
+    try {
+      const u = await api.get("/users");
+      setCleaners(u.filter((x: any) => x.role === "cleaner" || x.role === "owner_cleaner"));
+      setAssignOpen(true);
+    } catch {}
+  };
   const checkin = () => act(async () => { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); await api.post(`/jobs/${id}/checkin`); });
   const complete = () => act(async () => { await api.post(`/jobs/${id}/complete`); await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.back(); });
 
@@ -169,8 +180,11 @@ export default function JobDetail() {
 
       {/* Sticky action bar */}
       <View style={styles.actionBar}>
-        {isCleaner && !isAssigned && job.status === "pending" && (
-          <Button title="Apply / Auto-Accept" icon="checkmark-done" onPress={apply} loading={busy} testID="apply-button" />
+        {canApply && !isAssigned && job.status === "pending" && (
+          <Button title="Accept / Apply for Job" icon="checkmark-done" onPress={apply} loading={busy} testID="apply-button" />
+        )}
+        {isPoster && (job.status === "pending" || job.status === "in_progress") && (
+          <Button title="Assign a Cleaner" icon="person-add" variant={canApply && !isAssigned && job.status === "pending" ? "outline" : "primary"} onPress={openAssign} testID="assign-cleaner-button" />
         )}
         {isAssigned && job.status === "pending" && (
           <Button title="Check In & Start Job" icon="play" onPress={checkin} loading={busy} testID="checkin-button" />
@@ -188,6 +202,32 @@ export default function JobDetail() {
           <Button title="Rate Cleaner" icon="star" variant="secondary" onPress={() => setReviewing(true)} testID="rate-cleaner-button" />
         )}
       </View>
+
+      <Modal visible={assignOpen} transparent animationType="slide" onRequestClose={() => setAssignOpen(false)}>
+        <View style={styles.modalBg}>
+          <View style={styles.reviewModal}>
+            <View style={styles.reviewHeader}>
+              <Text style={styles.reviewTitle}>Assign a Cleaner</Text>
+              <Pressable onPress={() => setAssignOpen(false)} hitSlop={10}><Ionicons name="close" size={24} color={colors.onSurface} /></Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.lg }}>
+              {cleaners.length === 0 && <Text style={styles.note}>No cleaners available yet.</Text>}
+              {cleaners.map((c: any) => (
+                <Pressable key={c.user_id} onPress={() => assign(c.user_id)} style={styles.assignPick} testID={`assign-pick-${c.user_id}`}>
+                  <Avatar uri={c.avatar} name={c.name} size={40} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.personName}>{c.name}</Text>
+                    <RatingLabel rating={c.avg_rating || 0} count={c.review_count || 0} size={12} />
+                  </View>
+                  {job.assigned_cleaners?.includes(c.user_id)
+                    ? <Ionicons name="checkmark-circle" size={24} color={colors.success} />
+                    : <Ionicons name="add-circle" size={24} color={colors.brand} />}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={reviewing} transparent animationType="slide" onRequestClose={() => setReviewing(false)}>
         <View style={styles.modalBg}>
@@ -277,4 +317,5 @@ const styles = StyleSheet.create({
   reviewRow: { gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
   reviewInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, minHeight: 60, fontSize: 14, color: colors.onSurface, textAlignVertical: "top" },
   reviewThanks: { fontSize: 14, fontWeight: "700", color: colors.success },
+  assignPick: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, padding: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
 });

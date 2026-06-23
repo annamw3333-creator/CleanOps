@@ -470,7 +470,7 @@ async def apply_job(job_id: str, user=Depends(get_current_user)):
 @api_router.post("/jobs/{job_id}/assign")
 async def assign_job(job_id: str, body: TeamMemberIn, user=Depends(get_current_user)):
     job = await db.jobs.find_one({"job_id": job_id})
-    if not job or job["poster_id"] != user["user_id"]:
+    if not job or (job["poster_id"] != user["user_id"] and user["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Not authorized")
     await db.jobs.update_one({"job_id": job_id}, {
         "$addToSet": {"assigned_cleaners": body.cleaner_id},
