@@ -1,39 +1,40 @@
 # Auto Abodes — PRD
 
 ## Original Problem Statement
-A marketplace where cleaning companies, homeowners and landlords find qualified cleaners. Also a hub for cleaners to track schedules, log hours, build teams, and chat. Cleaners obtain jobs by qualifications set by the poster; auto-accept if qualified; if multiple qualify the poster reviews applicants and chooses. Live map of jobs color-coded by status (Red=pending, Yellow=in progress, Green=completed). Role dashboards. Job fields: clean type, address, date, start time window, assigned cleaners, est. duration, client name, client notes, manager notes. Cleaner checks in, follows checklist with mandatory photos (under sink, fridge/freezer, under furniture, full bathroom, full kitchen) for standard/deep/airbnb cleans, then Complete Job logs hours/pay and turns status green. Like Jobber + Turno + Uber + Homestars. Palette: dark navy, dark teal, greige, gold, light sage green.
+Marketplace for cleaning companies, homeowners & landlords to find qualified cleaners. Hub for cleaners to track schedules, log hours, build teams, chat. Cleaners obtain jobs by qualifications; auto-accept eligible jobs; posters pick among multiple qualified applicants. Live color-coded job map (Red=pending, Yellow=in_progress, Green=completed). Role dashboards. Detailed job info + checklist with mandatory photos. Check-in → checklist → Complete Job logs hours/pay. Like Jobber + Turno + Uber + Homestars. Palette: dark navy, dark teal, greige, gold, light sage.
 
 ## Architecture
-- Frontend: Expo Router (SDK 54), react-native-maps (native; web fallback list), expo-image-picker (base64 photos), expo-secure-store via @/src/utils/storage, AuthContext.
-- Backend: FastAPI + Motor (MongoDB). Session-token Bearer auth in `user_sessions`. Photos stored as base64 in `job.checklist`.
-- Auth: email/password + Emergent Google OAuth, unified `users` collection.
+- Frontend: Expo SDK 54 (expo-router), react-native-maps (web fallback list), expo-image-picker, expo-haptics.
+- Backend: FastAPI + Motor/MongoDB. Auth = session_token (uuid) in `user_sessions`, Bearer header.
+- Photos stored as base64 in job.checklist. Maps render on native; web shows list fallback.
 
 ## User Personas
-- Cleaner — finds & bids jobs, logs hours/earnings.
-- Company Owner — posts jobs, manages teams, ops map.
-- Homeowner/Landlord (client) — posts jobs, reviews applicants.
-- Owner + Cleaner — posts jobs AND bids on large jobs.
-- Admin (aestheticabodesyyc@gmail.com) — full access, business tier, no ads (auto-granted on login).
+- Cleaner: finds/bids jobs, logs hours/earnings.
+- Company Owner (admin of their co.): posts jobs, manages teams, live ops map.
+- Client (homeowner/landlord): posts jobs, picks cleaners.
+- Owner + Cleaner (combined): posts jobs AND bids on large jobs.
+- Admin (aestheticabodesyyc@gmail.com): full access, business tier, no ads — auto-granted on login.
 
 ## Implemented (2026-06-23)
-- Role-based register/login + Google auth; admin auto-upgrade.
-- Profile with qualifications, hourly rate, auto-accept toggle.
-- Job posting (type, address, time window, notes, required quals, pay) with auto-built checklist by clean type.
-- Available-jobs qualification filter; apply/auto-accept; applicant review & choose.
-- Check-in -> in_progress; checklist tasks + mandatory photo capture (base64); Complete Job (gated on full checklist) logs hours+pay.
-- Live map with status-color markers + pin peek card (web fallback list).
-- Dashboards + stats (cleaner earnings/hours; owner pipeline counts).
-- 1:1 chat (polling), conversation list, start-new-chat picker.
-- Teams (create/list/add members) backend.
-- Subscription tiers free/pro/business (simulated upgrade); Free-tier ad banner; ad-free on paid/admin.
-- Backend tests: 30 passed (0 fail).
+- Auth: email/password + Emergent Google OAuth; role selection incl. Owner+Cleaner.
+- Role-based bottom tabs: Home, Map, Jobs, Chat, Profile.
+- Dashboards with stats; ad banner on free tier.
+- Live job map color-coded by status + filters + pin peek card.
+- Post Job (type/address/date/time window/duration/pay/notes/required quals).
+- Job detail: info + checklist (tasks + 5 mandatory photos), check-in, complete (logs hours/pay), applicants review + choose + message.
+- Qualifications-based matching + auto-accept.
+- In-app 1:1 chat (polling).
+- Profile: edit details, qualifications, rate, auto-accept toggle.
+- Subscriptions: Free/Pro/Business (simulated upgrade); free=ads, paid/admin=no ads.
+- Backend tested: 30/30 pass.
 
 ## Backlog
-- P0: Real Stripe billing for subscriptions; real Google AdMob banners (needs native build).
-- P1: Team chat (group conversations); push notifications (on request); job scheduling/calendar; geocoding addresses to real coords; map auto-center to device location.
-- P2: Ratings/reviews (Homestars-style), recurring jobs (Turno-style), payouts, in-app photos gallery per job, advanced admin ops map filters.
+- P0: Stripe real subscription billing; real AdMob banner (needs device build).
+- P1: Teams UI (backend ready: /api/teams); harden assign endpoint (verify applicant qualified); map current-location centering + geocoding addresses to coords.
+- P2: Owner live map of all assigned jobs as dedicated admin view; ratings/reviews (Homestars-style); push notifications (on request); chat realtime via websockets; modularize server.py; login rate-limiting.
 
 ## Next Tasks
-1. Connect Stripe checkout to /api/subscription/upgrade.
-2. Wire AdMob on Free tier for production builds.
-3. Address geocoding so map pins use real job locations.
+- Wire Stripe checkout for tiers; add Teams management screen; geocode addresses on Post Job.
+
+## Test Credentials
+See /app/memory/test_credentials.md. Owner: t1@test.com/pass123. Admin: aestheticabodesyyc@gmail.com/admin123.
