@@ -16,7 +16,7 @@ export default function MapScreen() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState<any>(null);
-  const isCleaner = user?.role === "cleaner";
+  const isCleaner = user?.role === "cleaner" || user?.role === "owner_cleaner" || user?.role === "admin";
 
   const load = useCallback(async () => {
     try {

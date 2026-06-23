@@ -9,14 +9,17 @@ import { JobRow } from "./index";
 export default function Jobs() {
   const { user } = useAuth();
   const router = useRouter();
+  const canBid = user?.role === "cleaner" || user?.role === "owner_cleaner" || user?.role === "admin";
+  const canPost = user?.role !== "cleaner";
   const isCleaner = user?.role === "cleaner";
-  const [tab, setTab] = useState(isCleaner ? "available" : "mine");
+  const [tab, setTab] = useState(canBid ? "available" : "mine");
   const [jobs, setJobs] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const tabs = isCleaner
-    ? [{ k: "available", l: "Available" }, { k: "assigned", l: "My Jobs" }]
-    : [{ k: "mine", l: "Posted" }];
+  const tabs = [
+    ...(canBid ? [{ k: "available", l: "Available" }, { k: "assigned", l: "My Work" }] : []),
+    ...(canPost ? [{ k: "mine", l: "Posted" }] : []),
+  ];
 
   const load = useCallback(async () => {
     try { setJobs(await api.get(`/jobs?scope=${tab}`)); } catch {}

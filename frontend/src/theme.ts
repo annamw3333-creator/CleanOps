@@ -45,3 +45,34 @@ export const QUALIFICATIONS = [
   "Pet Friendly",
   "5+ Years Experience",
 ];
+
+export const SUBSCRIPTION_TIERS = [
+  {
+    id: "free",
+    name: "Free",
+    price: "$0",
+    period: "forever",
+    tagline: "Get started",
+    features: ["Browse & apply to jobs", "Up to 3 active jobs", "1:1 chat", "Ad-supported"],
+    accent: "#A39E93",
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "$19",
+    period: "/month",
+    tagline: "For active cleaners",
+    features: ["Everything in Free", "Unlimited jobs", "No ads", "Auto-accept jobs", "Priority in applicant lists"],
+    accent: "#1A5F7A",
+  },
+  {
+    id: "business",
+    name: "Business",
+    price: "$49",
+    period: "/month",
+    tagline: "For companies",
+    features: ["Everything in Pro", "Team management", "Live ops map", "Bid on large jobs", "Priority support"],
+    accent: "#D4AF37",
+  },
+];
+

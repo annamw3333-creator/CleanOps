@@ -27,6 +27,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+ADMIN_EMAIL = "aestheticabodesyyc@gmail.com"
+
+async def ensure_admin(user: dict) -> dict:
+    if user and user.get("email") == ADMIN_EMAIL and (user.get("role") != "admin" or user.get("tier") != "business"):
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"role": "admin", "tier": "business"}})
+        user["role"] = "admin"
+        user["tier"] = "business"
+    return user
+
+def with_perks(u: dict) -> dict:
+    tier = u.get("tier", "free")
+    u["ads_enabled"] = (tier == "free" and u.get("role") != "admin")
+    return u
 
 # ---------------- Helpers ----------------
 def now_utc():
@@ -79,7 +92,7 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str
     name: str
-    role: Literal["cleaner", "company_owner", "client"] = "client"
+    role: Literal["cleaner", "company_owner", "client", "owner_cleaner"] = "client"
 
 class LoginIn(BaseModel):
     email: EmailStr
@@ -97,7 +110,10 @@ class ProfileIn(BaseModel):
     qualifications: Optional[List[str]] = None
     hourly_rate: Optional[float] = None
     auto_accept: Optional[bool] = None
-    role: Optional[Literal["cleaner", "company_owner", "client"]] = None
+    role: Optional[Literal["cleaner", "company_owner", "client", "owner_cleaner"]] = None
+
+class SubscriptionIn(BaseModel):
+    tier: Literal["free", "pro", "business"]
 
 class JobIn(BaseModel):
     title: str
@@ -170,19 +186,22 @@ async def register(body: RegisterIn):
         "password_hash": hash_password(body.password),
         "phone": "", "bio": "", "avatar": "",
         "qualifications": [], "hourly_rate": 0, "auto_accept": False,
+        "tier": "free",
         "created_at": now_utc(),
     }
     await db.users.insert_one(doc)
+    doc = await ensure_admin(doc)
     token = await create_session(user_id)
-    return {"token": token, "user": clean(dict(doc))}
+    return {"token": token, "user": with_perks(clean(dict(doc)))}
 
 @api_router.post("/auth/login")
 async def login(body: LoginIn):
     user = await db.users.find_one({"email": body.email.lower()})
     if not user or not user.get("password_hash") or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
+    user = await ensure_admin(user)
     token = await create_session(user["user_id"])
-    return {"token": token, "user": clean(dict(user))}
+    return {"token": token, "user": with_perks(clean(dict(user)))}
 
 @api_router.post("/auth/google")
 async def google_auth(body: GoogleIn):
@@ -203,15 +222,24 @@ async def google_auth(body: GoogleIn):
             "role": body.role or "client", "password_hash": None,
             "phone": "", "bio": "", "avatar": data.get("picture", ""),
             "qualifications": [], "hourly_rate": 0, "auto_accept": False,
+            "tier": "free",
             "created_at": now_utc(),
         }
         await db.users.insert_one(doc)
+    doc = await ensure_admin(doc)
     token = await create_session(user_id, data.get("session_token"))
-    return {"token": token, "user": clean(dict(doc))}
+    return {"token": token, "user": with_perks(clean(dict(doc)))}
 
 @api_router.get("/auth/me")
 async def me(user=Depends(get_current_user)):
-    return {"user": clean(dict(user))}
+    user = await ensure_admin(user)
+    return {"user": with_perks(clean(dict(user)))}
+
+@api_router.post("/subscription/upgrade")
+async def upgrade_subscription(body: SubscriptionIn, user=Depends(get_current_user)):
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"tier": body.tier}})
+    updated = await db.users.find_one({"user_id": user["user_id"]})
+    return {"user": with_perks(clean(dict(updated)))}
 
 @api_router.post("/auth/logout")
 async def logout(authorization: Optional[str] = Header(None)):
@@ -225,7 +253,7 @@ async def update_profile(body: ProfileIn, user=Depends(get_current_user)):
     if updates:
         await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})
     updated = await db.users.find_one({"user_id": user["user_id"]})
-    return {"user": clean(dict(updated))}
+    return {"user": with_perks(clean(dict(updated)))}
 
 @api_router.get("/users")
 async def list_users(user=Depends(get_current_user)):
@@ -245,7 +273,7 @@ async def enrich_job(job: dict):
 
 @api_router.post("/jobs")
 async def create_job(body: JobIn, user=Depends(get_current_user)):
-    if user["role"] not in ("company_owner", "client"):
+    if user["role"] not in ("company_owner", "client", "owner_cleaner", "admin"):
         raise HTTPException(status_code=403, detail="Only owners or clients can post jobs")
     job_id = f"job_{uuid.uuid4().hex[:12]}"
     doc = {
@@ -282,7 +310,7 @@ async def list_jobs(scope: str = "available", status: Optional[str] = None, user
     jobs = await db.jobs.find(q).sort("created_at", -1).to_list(300)
     result = []
     for j in jobs:
-        if scope == "available" and user["role"] == "cleaner":
+        if scope == "available" and user["role"] in ("cleaner", "owner_cleaner"):
             req = set(j.get("required_qualifications", []))
             mine = set(user.get("qualifications", []))
             if not req.issubset(mine):
@@ -309,7 +337,7 @@ async def get_job(job_id: str, user=Depends(get_current_user)):
 
 @api_router.post("/jobs/{job_id}/apply")
 async def apply_job(job_id: str, user=Depends(get_current_user)):
-    if user["role"] != "cleaner":
+    if user["role"] not in ("cleaner", "owner_cleaner", "admin"):
         raise HTTPException(status_code=403, detail="Only cleaners can apply")
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:

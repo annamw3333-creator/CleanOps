@@ -115,6 +115,19 @@ export function Chip({ label, active, onPress, color, testID }: { label: string;
   );
 }
 
+export function AdBanner({ onUpgrade }: { onUpgrade: () => void }) {
+  return (
+    <Pressable onPress={onUpgrade} style={styles.ad} testID="ad-banner">
+      <View style={styles.adTag}><Text style={styles.adTagText}>AD</Text></View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.adTitle}>Sparkle Supplies — 20% off</Text>
+        <Text style={styles.adSub}>Tap to go ad-free with Pro →</Text>
+      </View>
+      <Ionicons name="close-circle" size={20} color={colors.muted} />
+    </Pressable>
+  );
+}
+
 export { colors, spacing, radius };
 
 const styles = StyleSheet.create({
@@ -135,4 +148,9 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 14, color: colors.muted, textAlign: "center" },
   chip: { height: 36, paddingHorizontal: 16, borderRadius: radius.pill, borderWidth: 1, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   chipText: { fontSize: 13, fontWeight: "600" },
+  ad: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceTertiary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderStyle: "dashed" },
+  adTag: { backgroundColor: colors.borderStrong, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  adTagText: { fontSize: 10, fontWeight: "800", color: "#fff" },
+  adTitle: { fontSize: 14, fontWeight: "700", color: colors.onSurface },
+  adSub: { fontSize: 12, color: colors.brand, fontWeight: "600" },
 });

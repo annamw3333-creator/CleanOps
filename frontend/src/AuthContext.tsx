@@ -8,7 +8,9 @@ type User = {
   user_id: string;
   email: string;
   name: string;
-  role: "cleaner" | "company_owner" | "client";
+  role: "cleaner" | "company_owner" | "client" | "owner_cleaner" | "admin";
+  tier?: "free" | "pro" | "business";
+  ads_enabled?: boolean;
   avatar?: string;
   phone?: string;
   bio?: string;

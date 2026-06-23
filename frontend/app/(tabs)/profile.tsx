@@ -5,9 +5,11 @@ import { api } from "@/src/api";
 import { Screen, Header, Card, Button, Input, Avatar, Chip, colors, spacing, radius } from "@/src/components/UI";
 import { QUALIFICATIONS } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 export default function Profile() {
   const { user, logout, setUser } = useAuth();
+  const router = useRouter();
   const [name, setName] = useState(user?.name || "");
   const [phone, setPhone] = useState(user?.phone || "");
   const [bio, setBio] = useState(user?.bio || "");
@@ -16,7 +18,7 @@ export default function Profile() {
   const [autoAccept, setAutoAccept] = useState(!!user?.auto_accept);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const isCleaner = user?.role === "cleaner";
+  const isCleaner = user?.role === "cleaner" || user?.role === "owner_cleaner" || user?.role === "admin";
 
   const toggleQual = (q: string) => setQuals((p) => p.includes(q) ? p.filter((x) => x !== q) : [...p, q]);
 
@@ -46,6 +48,28 @@ export default function Profile() {
           <Text style={styles.email}>{user?.email}</Text>
           <View style={styles.roleBadge}><Text style={styles.roleText}>{user?.role?.replace("_", " ")}</Text></View>
         </View>
+
+        <Card onPress={() => router.push("/subscription")} testID="manage-subscription" style={styles.subCard}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+            <Ionicons name={user?.role === "admin" ? "shield-checkmark" : "star"} size={22} color={colors.gold} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.subTitle}>{user?.role === "admin" ? "Admin — Full Access" : `${(user?.tier || "free").toUpperCase()} Plan`}</Text>
+              <Text style={styles.subSub}>{user?.ads_enabled ? "Ad-supported · tap to go ad-free" : "Ad-free · manage plan"}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </View>
+        </Card>
+
+        <Card onPress={() => router.push("/subscription")} testID="subscription-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+          <View style={[styles.tierIcon, { backgroundColor: (SUBSCRIPTION_TIERS.find(t => t.id === (user?.tier || "free"))?.accent || colors.brand) + "22" }]}>
+            <Ionicons name={user?.role === "admin" ? "shield-checkmark" : "star"} size={20} color={SUBSCRIPTION_TIERS.find(t => t.id === (user?.tier || "free"))?.accent || colors.brand} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.section}>{user?.role === "admin" ? "Admin Access" : `${(user?.tier || "free").charAt(0).toUpperCase() + (user?.tier || "free").slice(1)} Plan`}</Text>
+            <Text style={styles.hint}>{user?.ads_enabled ? "Ad-supported · tap to go ad-free" : "Ad-free · manage your plan"}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </Card>
 
         <Card style={{ gap: spacing.md }}>
           <Text style={styles.section}>Account Details</Text>
@@ -88,6 +112,10 @@ const styles = StyleSheet.create({
   email: { fontSize: 14, color: colors.muted },
   roleBadge: { backgroundColor: colors.gold, paddingVertical: 4, paddingHorizontal: 14, borderRadius: radius.pill, marginTop: 4 },
   roleText: { fontSize: 12, fontWeight: "800", color: colors.onGold, textTransform: "capitalize" },
+  subCard: { backgroundColor: colors.surfaceInverse },
+  subTitle: { fontSize: 15, fontWeight: "700", color: colors.onSurfaceInverse },
+  subSub: { fontSize: 12, color: "#ffffffaa" },
+  tierIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   section: { fontSize: 17, fontWeight: "700", color: colors.onSurface },
   hint: { fontSize: 12.5, color: colors.muted },
   qualWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },

@@ -13,6 +13,7 @@ const HERO = "https://images.unsplash.com/photo-1759722668087-efcc63c91ed2?crop=
 const ROLES = [
   { key: "cleaner", label: "Cleaner", icon: "sparkles-outline", desc: "Find jobs & log hours" },
   { key: "company_owner", label: "Company Owner", icon: "business-outline", desc: "Manage teams & jobs" },
+  { key: "owner_cleaner", label: "Owner + Cleaner", icon: "git-merge-outline", desc: "Post jobs AND bid on big ones" },
   { key: "client", label: "Homeowner / Landlord", icon: "home-outline", desc: "Post cleaning jobs" },
 ];
 

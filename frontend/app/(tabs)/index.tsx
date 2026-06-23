@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useAuth } from "@/src/AuthContext";
 import { api } from "@/src/api";
-import { Screen, Header, Card, Button, StatusPill, EmptyState, Avatar, colors, spacing, radius } from "@/src/components/UI";
+import { Screen, Header, Card, Button, StatusPill, EmptyState, Avatar, AdBanner, colors, spacing, radius } from "@/src/components/UI";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -36,6 +36,8 @@ export default function Dashboard() {
       <Header title={`Hi, ${user?.name?.split(" ")[0] || "there"}`} subtitle={isCleaner ? "Your work at a glance" : "Your command center"} />
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100, gap: spacing.lg }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+
+        {user?.ads_enabled && <AdBanner onUpgrade={() => router.push("/subscription")} />}
 
         {isCleaner ? (
           <View style={styles.statsRow}>
