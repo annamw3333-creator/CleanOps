@@ -1045,7 +1045,8 @@ async def driver_earnings(user=Depends(get_current_user)):
             "jobs_today": jobs_today, "is_online": bool(user.get("is_online"))}
 
 @api_router.get("/driver/offers")
-async def driver_offers(lat: Optional[float] = None, lng: Optional[float] = None, user=Depends(get_current_user)):
+async def driver_offers(lat: Optional[float] = None, lng: Optional[float] = None,
+                        radius_km: float = 75.0, limit: int = 25, user=Depends(get_current_user)):
     if user["role"] not in ("cleaner", "owner_cleaner", "admin"):
         raise HTTPException(status_code=403, detail="Driver mode is for cleaners")
     clat = lat if lat is not None else user.get("last_lat")
@@ -1069,12 +1070,15 @@ async def driver_offers(lat: Optional[float] = None, lng: Optional[float] = None
                 dist = round(haversine_km(clat, clng, j["latitude"], j["longitude"]), 1)
             except Exception:
                 dist = None
+            # skip jobs outside the search radius when we know the distance
+            if dist is not None and dist > radius_km:
+                continue
         ej = await enrich_job(j)
         ej["distance_km"] = dist
         ej["est_earnings"] = round(j.get("estimated_duration", 0) * j.get("pay_rate", 0), 2)
         offers.append(ej)
     offers.sort(key=lambda x: (x["distance_km"] is None, x["distance_km"] if x["distance_km"] is not None else 0))
-    return offers
+    return offers[:limit]
 
 @api_router.post("/driver/decline/{job_id}")
 async def driver_decline(job_id: str, user=Depends(get_current_user)):

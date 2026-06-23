@@ -33,6 +33,20 @@ Marketplace for cleaning companies, homeowners & landlords to find qualified cle
 - P2: Owner live map of all assigned jobs as dedicated admin view; ratings/reviews (Homestars-style); push notifications (on request); chat realtime via websockets; modularize server.py; login rate-limiting.
 
 ## Next Tasks
+## Implemented (2026-06-23, fork session)
+- Client List (`/clients` + dashboard card): aggregates jobs into clients/companies with tenure, frequency (Weekly/Bi-weekly/Monthly/etc.), clean type, assigned cleaners; editable contact + notes (`client_profiles` collection). APIs: GET /api/clients, PUT /api/clients/notes.
+- Cleaner Dashboard availability toggle: weekday chips update profile.availability inline.
+- Uber-style Driver Mode (`/driver` + dashboard card): Go Online/Offline (expo-location), polled nearby offers (haversine distance, 75km radius, limit 25), one-tap Accept (atomic POST /jobs/{id}/grab; 409 if taken), Decline (POST /driver/decline/{id} hides offer), earnings-forward (today/week/total). APIs: /driver/status, /driver/earnings, /driver/offers.
+- Verified previously-untested Onboarding (SOPs/quizzes) and Client Feedback public links — all working (26/26 backend, 5/5 frontend in iteration_5).
+- Seed script /app/backend/seed_demo.py creates owner/cleaner/client@abodeops.com (pass123) + demo jobs.
+
+## Backlog / Next Tasks
+- Multi-company cleaner support (P2): color-code jobs by company on schedule/calendar.
+- Scope GET /api/onboarding by owner/team (currently global).
+- Refactor server.py (>1100 lines) into routers (auth/jobs/billing/driver/clients/onboarding/feedback).
+- Migrate deprecated RN style props (shadow*/pointerEvents) app-wide.
+- Calendar sync write needs native build to validate on device.
+## (legacy) Earlier Next Tasks
 - Onboarding/welcome packages with quizzes + % completion (owner creates/uploads SOP docs; cleaners complete in-app; staff profile shows % done).
 - Client feedback + shareable public rating link (no-login) that employers can forward to the rated cleaner.
 - Calendar sync (recommended: expo-calendar to write shifts to the device calendar, which syncs to Google/Samsung/iCloud per device account; needs a native build to test).
