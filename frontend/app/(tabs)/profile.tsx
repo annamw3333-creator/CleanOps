@@ -5,6 +5,8 @@ import { api } from "@/src/api";
 import { Screen, Header, Card, Button, Input, Avatar, Chip, RatingLabel, colors, spacing, radius } from "@/src/components/UI";
 import { QUALIFICATIONS, SUBSCRIPTION_TIERS } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 
 export default function Profile() {
@@ -18,6 +20,9 @@ export default function Profile() {
   const [autoAccept, setAutoAccept] = useState(!!user?.auto_accept);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [experience, setExperience] = useState(user?.experience_summary || "");
+  const [portfolio, setPortfolio] = useState<string[]>(user?.portfolio || []);
+  const [availability, setAvailability] = useState<string[]>(user?.availability || []);
   const [myReviews, setMyReviews] = useState<any>(null);
   const isCleaner = user?.role === "cleaner" || user?.role === "owner_cleaner" || user?.role === "admin";
 
@@ -29,6 +34,14 @@ export default function Profile() {
 
   const toggleQual = (q: string) => setQuals((p) => p.includes(q) ? p.filter((x) => x !== q) : [...p, q]);
 
+  const pickPortfolio = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.4, base64: true });
+    if (res.canceled || !res.assets?.[0]?.base64) return;
+    setPortfolio((p) => (p.length >= 25 ? p : [...p, `data:image/jpeg;base64,${res.assets[0].base64}`]));
+  };
+
   const save = async () => {
     setSaving(true); setSaved(false);
     try {
@@ -37,6 +50,9 @@ export default function Profile() {
         hourly_rate: parseFloat(rate) || 0,
         qualifications: quals,
         auto_accept: autoAccept,
+        experience_summary: experience,
+        portfolio,
+        availability,
       });
       setUser(res.user);
       setSaved(true);
@@ -115,6 +131,47 @@ export default function Profile() {
               </View>
               <Switch value={autoAccept} onValueChange={setAutoAccept} trackColor={{ true: colors.brand }} testID="auto-accept-switch" />
             </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={styles.section}>Cleaning Experience</Text>
+              <Text style={styles.hint}>Required — summarize your experience for clients.</Text>
+              <Input value={experience} onChangeText={setExperience} multiline placeholder="e.g. 5 years of residential & Airbnb turnover cleaning..." testID="experience-input" />
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={styles.section}>Work Photos ({portfolio.length}/25)</Text>
+              <Text style={[styles.hint, portfolio.length < 10 && { color: colors.error }]}>
+                {portfolio.length < 10 ? `Add at least ${10 - portfolio.length} more (minimum 10 required).` : "Minimum met ✓"}
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {portfolio.map((p, i) => (
+                  <View key={i} style={styles.thumbWrap}>
+                    <Image source={{ uri: p }} style={styles.thumb} contentFit="cover" />
+                    <Pressable onPress={() => setPortfolio(portfolio.filter((_, j) => j !== i))} style={styles.thumbX} testID={`remove-photo-${i}`}>
+                      <Ionicons name="close" size={14} color="#fff" />
+                    </Pressable>
+                  </View>
+                ))}
+                {portfolio.length < 25 && (
+                  <Pressable onPress={pickPortfolio} style={styles.addThumb} testID="add-photo-button">
+                    <Ionicons name="camera" size={24} color={colors.brand} />
+                    <Text style={styles.addThumbText}>Add</Text>
+                  </Pressable>
+                )}
+              </ScrollView>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={styles.section}>Availability</Text>
+              <Text style={[styles.hint, availability.length === 0 && { color: colors.error }]}>Required — you can only be assigned jobs on these days.</Text>
+              <View style={styles.qualWrap}>
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                  <Chip key={d} label={d} active={availability.includes(d)}
+                    onPress={() => setAvailability(availability.includes(d) ? availability.filter((x) => x !== d) : [...availability, d])}
+                    testID={`avail-${d}`} />
+                ))}
+              </View>
+            </View>
           </Card>
         )}
 
@@ -167,4 +224,9 @@ const styles = StyleSheet.create({
   reviewer: { fontSize: 14, fontWeight: "700", color: colors.onSurface },
   reviewComment: { fontSize: 13, color: colors.onSurface },
   reviewJob: { fontSize: 11, color: colors.muted },
+  thumbWrap: { width: 80, height: 80, borderRadius: 10, overflow: "hidden" },
+  thumb: { width: 80, height: 80 },
+  thumbX: { position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: 10, backgroundColor: "#000a", alignItems: "center", justifyContent: "center" },
+  addThumb: { width: 80, height: 80, borderRadius: 10, borderWidth: 2, borderColor: colors.border, borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
+  addThumbText: { fontSize: 11, color: colors.brand, fontWeight: "600" },
 });

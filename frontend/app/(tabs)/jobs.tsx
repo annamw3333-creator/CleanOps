@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl } from "react-native
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "@/src/AuthContext";
 import { api } from "@/src/api";
-import { Screen, Header, Chip, EmptyState, Card, colors, spacing } from "@/src/components/UI";
+import { Screen, Header, Chip, EmptyState, Card, Button, colors, spacing } from "@/src/components/UI";
 import { JobRow } from "./index";
 
 export default function Jobs() {
@@ -27,6 +27,16 @@ export default function Jobs() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
+  const [msg, setMsg] = useState("");
+  const addToSchedule = async (jobId: string) => {
+    try {
+      const r = await api.post(`/jobs/${jobId}/apply`);
+      setMsg(r.auto_accepted ? "Added & auto-accepted! It's on your schedule." : "Added to your schedule — pending poster approval.");
+      await load();
+      setTimeout(() => setMsg(""), 3500);
+    } catch (e: any) { setMsg(e.message); setTimeout(() => setMsg(""), 4000); }
+  };
+
   return (
     <Screen>
       <Header title={isCleaner ? "Jobs" : "My Jobs"} />
@@ -37,10 +47,19 @@ export default function Jobs() {
       )}
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingTop: tabs.length > 1 ? 0 : spacing.lg, paddingBottom: 100, gap: spacing.md }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        {msg ? <Text style={{ color: colors.brand, fontWeight: "600", textAlign: "center" }} testID="jobs-msg">{msg}</Text> : null}
         {jobs.length === 0 ? (
           <Card><EmptyState icon="briefcase-outline" title="No jobs here"
-            subtitle={isCleaner && tab === "available" ? "No jobs match your qualifications yet. Update your profile to qualify for more." : "Nothing to show."} /></Card>
-        ) : jobs.map((j) => <JobRow key={j.job_id} job={j} onPress={() => router.push(`/job/${j.job_id}`)} />)}
+            subtitle={tab === "available" ? "No jobs match your qualifications & availability yet. Update your profile to qualify for more." : "Nothing to show."} /></Card>
+        ) : tab === "available" ? jobs.map((j) => (
+          <View key={j.job_id} style={{ gap: spacing.sm }}>
+            <JobRow job={j} onPress={() => router.push(`/job/${j.job_id}`)} />
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              <Button title="Add to Schedule" icon="calendar" onPress={() => addToSchedule(j.job_id)} style={{ flex: 1, height: 46 }} testID={`add-schedule-${j.job_id}`} />
+              <Button title="Details" variant="outline" onPress={() => router.push(`/job/${j.job_id}`)} style={{ flex: 1, height: 46 }} testID={`details-${j.job_id}`} />
+            </View>
+          </View>
+        )) : jobs.map((j) => <JobRow key={j.job_id} job={j} onPress={() => router.push(`/job/${j.job_id}`)} />)}
       </ScrollView>
     </Screen>
   );

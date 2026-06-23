@@ -17,6 +17,11 @@ type User = {
   qualifications?: string[];
   hourly_rate?: number;
   auto_accept?: boolean;
+  experience_summary?: string;
+  portfolio?: string[];
+  availability?: string[];
+  profile_complete?: boolean;
+  completed_count?: number;
 };
 
 type AuthCtx = {

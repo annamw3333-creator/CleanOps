@@ -70,8 +70,18 @@ export default function JobDetail() {
   };
 
   const checklist = job.checklist || [];
-  const allDone = checklist.length > 0 && checklist.every((i: any) => i.done);
   const doneCount = checklist.filter((i: any) => i.done).length;
+  const allDone = checklist.length > 0 && checklist.every((i: any) => i.done);
+  const myResp = job.cleaner_responses?.[user?.user_id || ""];
+  const respond = (action: "accept" | "decline" | "info") => act(async () => {
+    if (action === "info") {
+      const c = await api.post("/conversations", { participant_id: job.poster_id });
+      await api.post(`/jobs/${id}/respond`, { action });
+      router.push(`/chat/${c.conv_id}`);
+      return;
+    }
+    await api.post(`/jobs/${id}/respond`, { action });
+  });
 
   return (
     <Screen>
@@ -117,7 +127,7 @@ export default function JobDetail() {
                     <Avatar uri={c.avatar} name={c.name} size={36} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.personName}>{c.name}</Text>
-                      <RatingLabel rating={c.avg_rating || 0} count={c.review_count || 0} size={12} />
+                      <Text style={styles.rate}>{c.completed_count || 0} cleans completed</Text>
                     </View>
                   </View>
                 ))}
@@ -133,7 +143,7 @@ export default function JobDetail() {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.personName}>{a.name}</Text>
                         <Text style={styles.rate}>${a.hourly_rate}/hr · {a.qualifications.length} quals</Text>
-                        <RatingLabel rating={a.avg_rating || 0} count={a.review_count || 0} size={12} />
+                        <Text style={styles.rate}>{a.completed_count || 0} cleans completed</Text>
                       </View>
                     </View>
                     {a.bio ? <Text style={styles.bio}>{a.bio}</Text> : null}
@@ -186,7 +196,16 @@ export default function JobDetail() {
         {isPoster && (job.status === "pending" || job.status === "in_progress") && (
           <Button title="Assign a Cleaner" icon="person-add" variant={canApply && !isAssigned && job.status === "pending" ? "outline" : "primary"} onPress={openAssign} testID="assign-cleaner-button" />
         )}
-        {isAssigned && job.status === "pending" && (
+        {isAssigned && job.status === "pending" && myResp !== "accepted" && (
+          <>
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              <Button title="Accept" icon="checkmark" onPress={() => respond("accept")} loading={busy} style={{ flex: 1, height: 48 }} testID="accept-job-button" />
+              <Button title="Decline" icon="close" variant="outline" onPress={() => respond("decline")} loading={busy} style={{ flex: 1, height: 48 }} testID="decline-job-button" />
+            </View>
+            <Button title="Request More Info" icon="chatbubble-ellipses-outline" variant="ghost" onPress={() => respond("info")} testID="request-info-button" />
+          </>
+        )}
+        {isAssigned && job.status === "pending" && myResp === "accepted" && (
           <Button title="Check In & Start Job" icon="play" onPress={checkin} loading={busy} testID="checkin-button" />
         )}
         {isAssigned && job.status === "in_progress" && (
@@ -217,7 +236,7 @@ export default function JobDetail() {
                   <Avatar uri={c.avatar} name={c.name} size={40} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.personName}>{c.name}</Text>
-                    <RatingLabel rating={c.avg_rating || 0} count={c.review_count || 0} size={12} />
+                    <Text style={styles.rate}>{c.completed_count || 0} cleans completed</Text>
                   </View>
                   {job.assigned_cleaners?.includes(c.user_id)
                     ? <Ionicons name="checkmark-circle" size={24} color={colors.success} />

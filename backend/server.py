@@ -61,7 +61,22 @@ async def ensure_admin(user: dict) -> dict:
 def with_perks(u: dict) -> dict:
     tier = u.get("tier", "free")
     u["ads_enabled"] = (tier == "free" and u.get("role") != "admin")
+    if u.get("role") in ("cleaner", "owner_cleaner"):
+        u["profile_complete"] = bool(u.get("experience_summary")) and len(u.get("portfolio", [])) >= 10 and len(u.get("availability", [])) >= 1
+    else:
+        u["profile_complete"] = True
     return u
+
+WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+def job_weekday(date_str: str):
+    try:
+        return WEEKDAYS[datetime.strptime(date_str[:10], "%Y-%m-%d").weekday()]
+    except Exception:
+        return None
+
+async def completed_count(cid: str) -> int:
+    return await db.jobs.count_documents({"assigned_cleaners": cid, "status": "completed"})
 
 # ---------------- Helpers ----------------
 def now_utc():
@@ -150,6 +165,9 @@ class ProfileIn(BaseModel):
     qualifications: Optional[List[str]] = None
     hourly_rate: Optional[float] = None
     auto_accept: Optional[bool] = None
+    experience_summary: Optional[str] = None
+    portfolio: Optional[List[str]] = None
+    availability: Optional[List[str]] = None
     role: Optional[Literal["cleaner", "company_owner", "client", "owner_cleaner"]] = None
 
 class SubscriptionIn(BaseModel):
@@ -234,6 +252,7 @@ async def register(body: RegisterIn):
         "password_hash": hash_password(body.password),
         "phone": "", "bio": "", "avatar": "",
         "qualifications": [], "hourly_rate": 0, "auto_accept": False,
+        "experience_summary": "", "portfolio": [], "availability": [],
         "tier": "free",
         "created_at": now_utc(),
     }
@@ -270,6 +289,7 @@ async def google_auth(body: GoogleIn):
             "role": body.role or "client", "password_hash": None,
             "phone": "", "bio": "", "avatar": data.get("picture", ""),
             "qualifications": [], "hourly_rate": 0, "auto_accept": False,
+            "experience_summary": "", "portfolio": [], "availability": [],
             "tier": "free",
             "created_at": now_utc(),
         }
@@ -347,6 +367,8 @@ async def logout(authorization: Optional[str] = Header(None)):
 @api_router.put("/profile")
 async def update_profile(body: ProfileIn, user=Depends(get_current_user)):
     updates = {k: v for k, v in body.dict().items() if v is not None}
+    if "portfolio" in updates and len(updates["portfolio"]) > 25:
+        raise HTTPException(status_code=400, detail="You can upload at most 25 photos")
     if updates:
         await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})
     updated = await db.users.find_one({"user_id": user["user_id"]})
@@ -362,8 +384,12 @@ async def geocode(address: str, user=Depends(get_current_user)):
 @api_router.get("/users")
 async def list_users(user=Depends(get_current_user)):
     users = await db.users.find({"user_id": {"$ne": user["user_id"]}}).to_list(200)
-    return [{"user_id": u["user_id"], "name": u["name"], "role": u["role"], "avatar": u.get("avatar", ""),
-             "avg_rating": round(u.get("avg_rating", 0), 1), "review_count": u.get("review_count", 0)} for u in users]
+    result = []
+    for u in users:
+        cc = await completed_count(u["user_id"]) if u["role"] in ("cleaner", "owner_cleaner") else 0
+        result.append({"user_id": u["user_id"], "name": u["name"], "role": u["role"], "avatar": u.get("avatar", ""),
+                       "completed_count": cc})
+    return result
 
 # ---------------- Jobs ----------------
 async def enrich_job(job: dict):
@@ -373,7 +399,7 @@ async def enrich_job(job: dict):
         c = await db.users.find_one({"user_id": cid})
         if c:
             assigned.append({"user_id": c["user_id"], "name": c["name"], "avatar": c.get("avatar", ""),
-                             "avg_rating": round(c.get("avg_rating", 0), 1), "review_count": c.get("review_count", 0)})
+                             "completed_count": await completed_count(c["user_id"])})
     job["assigned_cleaners_info"] = assigned
     return job
 
@@ -441,8 +467,8 @@ async def get_job(job_id: str, user=Depends(get_current_user)):
         if c:
             apps.append({"user_id": c["user_id"], "name": c["name"], "avatar": c.get("avatar", ""),
                          "qualifications": c.get("qualifications", []), "hourly_rate": c.get("hourly_rate", 0),
-                         "bio": c.get("bio", ""),
-                         "avg_rating": round(c.get("avg_rating", 0), 1), "review_count": c.get("review_count", 0)})
+                         "bio": c.get("bio", ""), "experience_summary": c.get("experience_summary", ""),
+                         "portfolio": c.get("portfolio", []), "completed_count": await completed_count(c["user_id"])})
     enriched["applicants_info"] = apps
     return enriched
 
@@ -450,9 +476,14 @@ async def get_job(job_id: str, user=Depends(get_current_user)):
 async def apply_job(job_id: str, user=Depends(get_current_user)):
     if user["role"] not in ("cleaner", "owner_cleaner", "admin"):
         raise HTTPException(status_code=403, detail="Only cleaners can apply")
+    if user["role"] in ("cleaner", "owner_cleaner") and not (user.get("experience_summary") and len(user.get("portfolio", [])) >= 10 and len(user.get("availability", [])) >= 1):
+        raise HTTPException(status_code=400, detail="Complete your profile: add an experience summary, at least 10 work photos, and your availability before applying")
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    wd = job_weekday(job.get("date", ""))
+    if wd and wd not in user.get("availability", []):
+        raise HTTPException(status_code=400, detail=f"You are not available on {wd}. Update your availability to take this job.")
     req = set(job.get("required_qualifications", []))
     mine = set(user.get("qualifications", []))
     if not req.issubset(mine):
@@ -472,10 +503,33 @@ async def assign_job(job_id: str, body: TeamMemberIn, user=Depends(get_current_u
     job = await db.jobs.find_one({"job_id": job_id})
     if not job or (job["poster_id"] != user["user_id"] and user["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Not authorized")
+    cleaner = await db.users.find_one({"user_id": body.cleaner_id})
+    wd = job_weekday(job.get("date", ""))
+    if cleaner and wd and wd not in cleaner.get("availability", []):
+        raise HTTPException(status_code=400, detail=f"{cleaner['name']} is not available on {wd}")
     await db.jobs.update_one({"job_id": job_id}, {
         "$addToSet": {"assigned_cleaners": body.cleaner_id},
         "$pull": {"applicants": body.cleaner_id},
     })
+    updated = await db.jobs.find_one({"job_id": job_id})
+    return await enrich_job(updated)
+
+class JobRespondIn(BaseModel):
+    action: Literal["accept", "decline", "info"]
+
+@api_router.post("/jobs/{job_id}/respond")
+async def respond_job(job_id: str, body: JobRespondIn, user=Depends(get_current_user)):
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job or user["user_id"] not in job.get("assigned_cleaners", []):
+        raise HTTPException(status_code=403, detail="You are not assigned to this job")
+    if body.action == "decline":
+        await db.jobs.update_one({"job_id": job_id}, {
+            "$pull": {"assigned_cleaners": user["user_id"]},
+            "$set": {f"cleaner_responses.{user['user_id']}": "declined"},
+        })
+    else:
+        status = "accepted" if body.action == "accept" else "info_requested"
+        await db.jobs.update_one({"job_id": job_id}, {"$set": {f"cleaner_responses.{user['user_id']}": status}})
     updated = await db.jobs.find_one({"job_id": job_id})
     return await enrich_job(updated)
 
@@ -679,6 +733,8 @@ async def review_cleaner(job_id: str, body: ReviewIn, user=Depends(get_current_u
 
 @api_router.get("/users/{cleaner_id}/reviews")
 async def get_reviews(cleaner_id: str, user=Depends(get_current_user)):
+    if user["user_id"] != cleaner_id:
+        raise HTTPException(status_code=403, detail="Ratings are private to the cleaner")
     revs = await db.reviews.find({"cleaner_id": cleaner_id}).sort("created_at", -1).to_list(200)
     target = await db.users.find_one({"user_id": cleaner_id})
     return {
