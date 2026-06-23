@@ -101,3 +101,120 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "AbodeOps cleaning marketplace. New work this session: (1) verify untested Onboarding/Client-Feedback/Calendar features, (2) Client List feature for owners & cleaners, (3) cleaner Dashboard availability toggle, (4) Uber-style Driver Mode (go online/offline, nearby polled offers, one-tap accept/decline, earnings-forward screen)."
+
+backend:
+  - task: "Onboarding APIs (create/list/complete, owner vs cleaner)"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Coded previously, never tested. Endpoints: POST/GET /api/onboarding, POST /api/onboarding/{id}/complete. Owner creates docs/quizzes; cleaner completes & scores."
+  - task: "Client feedback public link APIs"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "POST /api/jobs/{id}/feedback-link (auth), GET/POST /api/public/feedback/{token} (no auth). Never tested."
+  - task: "Client List APIs (GET /api/clients, PUT /api/clients/notes)"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Aggregates jobs into clients with tenure, frequency, clean type, cleaners. Curl-verified for owner (3 clients) & cleaner (1 company). Notes upsert via client_profiles collection."
+  - task: "Driver Mode APIs (status, earnings, offers, grab, decline)"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Curl-verified: offers sorted by haversine distance, earnings today/week/total, grab is atomic (409 on double-grab), decline hides offer. /driver/status sets online + location."
+
+frontend:
+  - task: "Client List screen + dashboard card"
+    implemented: true
+    working: "NA"
+    file: "app/clients.tsx, app/(tabs)/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New /clients screen with client cards, frequency badges, editable contact/notes modal. Dashboard 'Client List' card added for all roles."
+  - task: "Cleaner availability toggle on dashboard"
+    implemented: true
+    working: "NA"
+    file: "app/(tabs)/index.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Weekday chips on dashboard for cleaners; tapping updates profile.availability via PUT /profile."
+  - task: "Driver Mode screen (online toggle, offers, accept/decline, earnings)"
+    implemented: true
+    working: "NA"
+    file: "app/driver.tsx, app/(tabs)/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Smoke-tested: dashboard Driver Mode card + driver screen render. Toggle online polls /driver/offers every 6s; accept calls /grab, decline calls /driver/decline. Location optional (web returns null, offers by recency)."
+  - task: "Onboarding & Feedback screens (untested from prior session)"
+    implemented: true
+    working: "NA"
+    file: "app/onboarding.tsx, app/feedback/[token].tsx, app/job/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Never tested. Onboarding builder/taker; public feedback form; job detail has Add to Calendar + Get Feedback Link buttons."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Driver Mode APIs (status, earnings, offers, grab, decline)"
+    - "Driver Mode screen (online toggle, offers, accept/decline, earnings)"
+    - "Client List APIs (GET /api/clients, PUT /api/clients/notes)"
+    - "Client List screen + dashboard card"
+    - "Onboarding APIs (create/list/complete, owner vs cleaner)"
+    - "Client feedback public link APIs"
+    - "Cleaner availability toggle on dashboard"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Implemented Client List, cleaner availability toggle, and Uber-style Driver Mode. Also need to verify previously-untested Onboarding/Feedback/Calendar. Backend curl-verified for clients & driver. Seeded accounts (pass123): owner@abodeops.com, cleaner@abodeops.com (complete profile, has earnings + 3 nearby pending demo jobs as offers), client@abodeops.com. Demo jobs are near Calgary 51.0447,-114.0719 with NO required quals so cleaner qualifies. Please test backend first then frontend. Note: calendar write needs native build (skip device calendar); test the feedback-link generation + public feedback form instead. Re-run seed if demo jobs get consumed: cd /app/backend && python seed_demo.py"

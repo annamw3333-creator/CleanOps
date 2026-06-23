@@ -39,6 +39,8 @@ export default function RootLayout() {
             <Stack.Screen name="subscription" options={{ presentation: "modal" }} />
             <Stack.Screen name="teams" />
             <Stack.Screen name="operations" />
+            <Stack.Screen name="clients" />
+            <Stack.Screen name="driver" />
           </Stack>
         </AuthProvider>
       </SafeAreaProvider>

@@ -7,6 +7,7 @@ import logging
 import uuid
 import hashlib
 import secrets
+import math
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal
@@ -888,6 +889,223 @@ async def public_feedback_post(token: str, body: PublicFeedbackIn):
         "rating": body.rating, "comment": body.comment or "", "client_name": body.client_name or "Client",
         "created_at": iso(now_utc())}}})
     return {"ok": True}
+
+# ---------------- Client list ----------------
+def freq_label(count: int, span_days: int) -> str:
+    if count <= 1:
+        return "One-time"
+    interval = span_days / (count - 1) if count > 1 else 0
+    if interval <= 0:
+        return "Recurring"
+    if interval <= 10:
+        return "Weekly"
+    if interval <= 20:
+        return "Bi-weekly"
+    if interval <= 45:
+        return "Monthly"
+    return "Occasional"
+
+class ClientNotesIn(BaseModel):
+    key: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    notes: Optional[str] = None
+
+@api_router.get("/clients")
+async def list_clients(user=Depends(get_current_user)):
+    is_cleaner = user["role"] == "cleaner"
+    groups: dict = {}
+    if is_cleaner:
+        jobs = await db.jobs.find({"assigned_cleaners": user["user_id"]}).to_list(2000)
+        for j in jobs:
+            key = j.get("poster_id") or (j.get("poster_name") or "Client")
+            groups.setdefault(key, {"name": j.get("poster_name", "Client"), "jobs": []})["jobs"].append(j)
+    else:
+        jobs = await db.jobs.find({"poster_id": user["user_id"]}).to_list(2000)
+        for j in jobs:
+            name = (j.get("client_name") or "Client").strip() or "Client"
+            groups.setdefault(name.lower(), {"name": name, "jobs": []})["jobs"].append(j)
+
+    result = []
+    for key, g in groups.items():
+        gjobs = g["jobs"]
+        count = len(gjobs)
+        created = sorted([j.get("created_at") for j in gjobs if j.get("created_at")])
+        first = created[0] if created else None
+        valid_dates = []
+        for j in gjobs:
+            ds = j.get("date")
+            if ds:
+                try:
+                    valid_dates.append(datetime.strptime(ds[:10], "%Y-%m-%d"))
+                except Exception:
+                    pass
+        span_days = (max(valid_dates) - min(valid_dates)).days if len(valid_dates) >= 2 else 0
+        clean_types: dict = {}
+        addresses = set()
+        cleaner_ids = set()
+        for j in gjobs:
+            ct = j.get("clean_type", "standard")
+            clean_types[ct] = clean_types.get(ct, 0) + 1
+            if j.get("address"):
+                addresses.add(j["address"])
+            for cid in j.get("assigned_cleaners", []):
+                cleaner_ids.add(cid)
+        primary_type = max(clean_types, key=clean_types.get) if clean_types else "standard"
+        cleaners = []
+        for cid in cleaner_ids:
+            c = await db.users.find_one({"user_id": cid})
+            if c:
+                cleaners.append(c["name"])
+        prof = await db.client_profiles.find_one({"owner_id": user["user_id"], "key": str(key)})
+        # for cleaners, contact info comes from the poster user record if available
+        contact_phone = (prof or {}).get("phone", "")
+        contact_email = (prof or {}).get("email", "")
+        if is_cleaner and not contact_phone:
+            poster = await db.users.find_one({"user_id": key}) if isinstance(key, str) else None
+            if poster:
+                contact_phone = poster.get("phone", "")
+                contact_email = poster.get("email", "")
+        result.append({
+            "key": str(key),
+            "name": g["name"],
+            "job_count": count,
+            "completed": sum(1 for j in gjobs if j.get("status") == "completed"),
+            "member_since": iso(first),
+            "frequency": freq_label(count, span_days),
+            "clean_type": primary_type,
+            "addresses": sorted(addresses),
+            "cleaners": sorted(set(cleaners)),
+            "phone": contact_phone,
+            "email": contact_email,
+            "notes": (prof or {}).get("notes", ""),
+            "is_company": is_cleaner,
+        })
+    result.sort(key=lambda x: (x["job_count"], x["name"]), reverse=True)
+    return result
+
+@api_router.put("/clients/notes")
+async def update_client_notes(body: ClientNotesIn, user=Depends(get_current_user)):
+    updates = {k: v for k, v in {"phone": body.phone, "email": body.email, "notes": body.notes}.items() if v is not None}
+    await db.client_profiles.update_one(
+        {"owner_id": user["user_id"], "key": body.key},
+        {"$set": {**updates, "owner_id": user["user_id"], "key": body.key, "updated_at": now_utc()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+# ---------------- Driver mode (Uber-style) ----------------
+def haversine_km(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+def _aware(dt):
+    if isinstance(dt, datetime) and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+class DriverStatusIn(BaseModel):
+    online: bool
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+@api_router.post("/driver/status")
+async def driver_status(body: DriverStatusIn, user=Depends(get_current_user)):
+    updates = {"is_online": body.online}
+    if body.online:
+        updates["online_since"] = now_utc()
+    if body.latitude is not None:
+        updates["last_lat"] = body.latitude
+    if body.longitude is not None:
+        updates["last_lng"] = body.longitude
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})
+    return {"online": body.online}
+
+@api_router.get("/driver/earnings")
+async def driver_earnings(user=Depends(get_current_user)):
+    logs = await db.hours_log.find({"cleaner_id": user["user_id"]}).to_list(2000)
+    now = now_utc()
+    today = week = total = 0.0
+    jobs_today = 0
+    for l in logs:
+        d = _aware(l.get("date"))
+        pay = l.get("pay", 0)
+        total += pay
+        if isinstance(d, datetime):
+            if d.date() == now.date():
+                today += pay
+                jobs_today += 1
+            if (now - d).days < 7:
+                week += pay
+    return {"today": round(today, 2), "week": round(week, 2), "total": round(total, 2),
+            "jobs_today": jobs_today, "is_online": bool(user.get("is_online"))}
+
+@api_router.get("/driver/offers")
+async def driver_offers(lat: Optional[float] = None, lng: Optional[float] = None, user=Depends(get_current_user)):
+    if user["role"] not in ("cleaner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=403, detail="Driver mode is for cleaners")
+    clat = lat if lat is not None else user.get("last_lat")
+    clng = lng if lng is not None else user.get("last_lng")
+    jobs = await db.jobs.find({"status": "pending", "assigned_cleaners": {"$size": 0}}).sort("created_at", -1).to_list(300)
+    mine_quals = set(user.get("qualifications", []))
+    avail = user.get("availability", [])
+    offers = []
+    for j in jobs:
+        if user["user_id"] in j.get("declined_by", []):
+            continue
+        req = set(j.get("required_qualifications", []))
+        if not req.issubset(mine_quals):
+            continue
+        wd = job_weekday(j.get("date", ""))
+        if wd and avail and wd not in avail:
+            continue
+        dist = None
+        if clat is not None and clng is not None and j.get("latitude") and j.get("longitude"):
+            try:
+                dist = round(haversine_km(clat, clng, j["latitude"], j["longitude"]), 1)
+            except Exception:
+                dist = None
+        ej = await enrich_job(j)
+        ej["distance_km"] = dist
+        ej["est_earnings"] = round(j.get("estimated_duration", 0) * j.get("pay_rate", 0), 2)
+        offers.append(ej)
+    offers.sort(key=lambda x: (x["distance_km"] is None, x["distance_km"] if x["distance_km"] is not None else 0))
+    return offers
+
+@api_router.post("/driver/decline/{job_id}")
+async def driver_decline(job_id: str, user=Depends(get_current_user)):
+    await db.jobs.update_one({"job_id": job_id}, {"$addToSet": {"declined_by": user["user_id"]}})
+    return {"ok": True}
+
+@api_router.post("/jobs/{job_id}/grab")
+async def grab_job(job_id: str, user=Depends(get_current_user)):
+    if user["role"] not in ("cleaner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=403, detail="Only cleaners can accept jobs")
+    if user["role"] in ("cleaner", "owner_cleaner") and not (user.get("experience_summary") and len(user.get("portfolio", [])) >= 10 and len(user.get("availability", [])) >= 1):
+        raise HTTPException(status_code=400, detail="Complete your profile (experience, 10+ photos, availability) before accepting jobs")
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.get("assigned_cleaners"):
+        raise HTTPException(status_code=409, detail="This job was just taken by another cleaner")
+    req = set(job.get("required_qualifications", []))
+    if not req.issubset(set(user.get("qualifications", []))):
+        raise HTTPException(status_code=403, detail="You don't meet the required qualifications")
+    wd = job_weekday(job.get("date", ""))
+    if wd and user.get("availability") and wd not in user.get("availability", []):
+        raise HTTPException(status_code=400, detail=f"You are not available on {wd}")
+    res = await db.jobs.update_one(
+        {"job_id": job_id, "assigned_cleaners": {"$size": 0}},
+        {"$addToSet": {"assigned_cleaners": user["user_id"]}, "$pull": {"applicants": user["user_id"]}},
+    )
+    if res.modified_count == 0:
+        raise HTTPException(status_code=409, detail="This job was just taken by another cleaner")
+    updated = await db.jobs.find_one({"job_id": job_id})
+    return await enrich_job(updated)
 
 app.include_router(api_router)
 app.add_middleware(
