@@ -87,6 +87,24 @@ def build_checklist(clean_type: str):
     photos = [{**p, "done": False, "photo_base64": None} for p in PHOTO_ITEMS]
     return tasks + photos
 
+async def geocode_address(address: str):
+    """Best-effort geocoding via OpenStreetMap Nominatim (no API key)."""
+    if not address:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=8) as hc:
+            r = await hc.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": address, "format": "json", "limit": 1},
+                headers={"User-Agent": "AutoAbodes/1.0"},
+            )
+        if r.status_code == 200 and r.json():
+            d = r.json()[0]
+            return float(d["lat"]), float(d["lon"])
+    except Exception:
+        pass
+    return None
+
 # ---------------- Models ----------------
 class RegisterIn(BaseModel):
     email: EmailStr
@@ -133,6 +151,9 @@ class JobIn(BaseModel):
 
 class MessageIn(BaseModel):
     text: str
+
+class JobStatusIn(BaseModel):
+    status: Literal["pending", "in_progress", "completed", "cancelled"]
 
 class ConversationIn(BaseModel):
     participant_id: str
@@ -255,6 +276,13 @@ async def update_profile(body: ProfileIn, user=Depends(get_current_user)):
     updated = await db.users.find_one({"user_id": user["user_id"]})
     return {"user": with_perks(clean(dict(updated)))}
 
+@api_router.get("/geocode")
+async def geocode(address: str, user=Depends(get_current_user)):
+    coords = await geocode_address(address)
+    if not coords:
+        raise HTTPException(status_code=404, detail="Could not locate that address")
+    return {"latitude": coords[0], "longitude": coords[1]}
+
 @api_router.get("/users")
 async def list_users(user=Depends(get_current_user)):
     users = await db.users.find({"user_id": {"$ne": user["user_id"]}}).to_list(200)
@@ -276,12 +304,16 @@ async def create_job(body: JobIn, user=Depends(get_current_user)):
     if user["role"] not in ("company_owner", "client", "owner_cleaner", "admin"):
         raise HTTPException(status_code=403, detail="Only owners or clients can post jobs")
     job_id = f"job_{uuid.uuid4().hex[:12]}"
+    data = body.dict()
+    coords = await geocode_address(body.address)
+    if coords:
+        data["latitude"], data["longitude"] = coords
     doc = {
         "job_id": job_id,
         "poster_id": user["user_id"],
         "poster_name": user["name"],
         "poster_role": user["role"],
-        **body.dict(),
+        **data,
         "status": "pending",
         "assigned_cleaners": [],
         "applicants": [],
@@ -367,6 +399,28 @@ async def assign_job(job_id: str, body: TeamMemberIn, user=Depends(get_current_u
     })
     updated = await db.jobs.find_one({"job_id": job_id})
     return await enrich_job(updated)
+
+@api_router.post("/jobs/{job_id}/status")
+async def set_job_status(job_id: str, body: JobStatusIn, user=Depends(get_current_user)):
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job or (job["poster_id"] != user["user_id"] and user["role"] != "admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    updates = {"status": body.status}
+    if body.status == "in_progress" and not job.get("checked_in_at"):
+        updates["checked_in_at"] = now_utc()
+    if body.status == "completed":
+        updates["completed_at"] = now_utc()
+    await db.jobs.update_one({"job_id": job_id}, {"$set": updates})
+    updated = await db.jobs.find_one({"job_id": job_id})
+    return await enrich_job(updated)
+
+@api_router.delete("/jobs/{job_id}")
+async def delete_job(job_id: str, user=Depends(get_current_user)):
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job or (job["poster_id"] != user["user_id"] and user["role"] != "admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    await db.jobs.delete_one({"job_id": job_id})
+    return {"ok": True}
 
 @api_router.post("/jobs/{job_id}/checkin")
 async def checkin_job(job_id: str, user=Depends(get_current_user)):

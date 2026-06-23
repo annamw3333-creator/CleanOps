@@ -71,6 +71,19 @@ export default function Profile() {
           <Ionicons name="chevron-forward" size={20} color={colors.muted} />
         </Card>
 
+        {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
+          <Card onPress={() => router.push("/teams")} testID="teams-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+            <View style={[styles.tierIcon, { backgroundColor: colors.sage }]}>
+              <Ionicons name="people" size={20} color={colors.brand} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.section}>Manage Teams</Text>
+              <Text style={styles.hint}>Create crews & add cleaners</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+          </Card>
+        )}
+
         <Card style={{ gap: spacing.md }}>
           <Text style={styles.section}>Account Details</Text>
           <Input label="Name" value={name} onChangeText={setName} testID="profile-name" />

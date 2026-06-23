@@ -1,0 +1,44 @@
+{
+  "summary": "Round-2 backend + frontend smoke testing for Auto Abodes. Added /app/backend/tests/test_round2_features.py covering all new endpoints: POST /api/jobs/{id}/status (in_progress sets checked_in_at, completed sets completed_at, cancelled status accepted, non-poster 403, admin override, invalid value 422), DELETE /api/jobs/{id} (poster + admin allowed, others 403, GET-after-DELETE returns 404), POST /api/jobs auto-geocoding via Nominatim (Times Square -> lat~40.7, lon~-74), GET /api/geocode (known address returns float lat/lng, unknown -> 404), and Teams CRUD (create, /teams/mine with members_info, add member by owner, non-owner 403). All 16 new tests passed (100%), and full regression of the round-1 suite (test_auto_abodes.py) re-ran with 30/30 passing — so combined 46/46 backend tests pass. Frontend Playwright smoke: navigated to /teams, confirmed testIDs (new-team-button, team-name-input, create-team-button, operations-card) render correctly with appropriate mobile design (proper spacing, ≥44px tap targets, themed cards). Operations entry-point card on Home is properly gated behind owner/admin role and present in code with testID=operations-card. NOTE: testing the full UI tap-through (Start/Done/Cancel/Delete + Assign modal) required an authenticated session — the email/password login submit didn't fully redirect to the tabs in the headless mobile viewport (likely because the script's text-based selector matched the 'Sign In' segmented tab rather than the submit button; the submit button lacks a testID). Recommend adding testID=login-submit so the UI tap-through can be deterministically scripted next iteration.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "auth screen", "issue": "The 'Sign In' submit button lacks a testID. Both the segmented tab and the submit CTA share the text 'Sign In', making Playwright text-based selectors ambiguous and causing login automation to mis-click the tab.", "testID": "missing testID=login-submit", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_round2_features.py",
+    "/app/backend/tests/test_auto_abodes.py",
+    "/app/test_reports/pytest/round2_results.xml",
+    "/app/test_reports/pytest/regression_results.xml"
+  ],
+  "action_items": [
+    "(Minor) Add testID='login-submit' to the Sign In button on /auth so end-to-end mobile flows can be reliably automated.",
+    "(Cleanup) In /app/frontend/app/operations.tsx line 39 the `remove` handler contains a dead expression: `await (api as any).get;` which just references the method without invoking it. The actual delete is performed by fetchDelete(). Remove the dead line to avoid confusion.",
+    "Nominatim is rate-limited and shared (no key). For production consider caching coords on the address or adding a fallback geocoder; tests gracefully skip on transient failures.",
+    "The DELETE endpoint hard-deletes jobs even when they have a logged history in hours_log. Consider soft-delete (`status:'deleted'`) so cleaner stats remain intact and audit trail is preserved. Not blocking for current scope."
+  ],
+  "critical_code_review_comments": [
+    "operations.tsx imports api but uses raw fetch via fetchDelete() for DELETE since the `api` wrapper only exposes get/post. Better: add api.del/delete helper and remove the dead `await (api as any).get;` line for consistency.",
+    "set_job_status accepts 'pending' from any prior state — no guard against illegal transitions (e.g. completed -> pending). Acceptable for the Owner-driven Operations UI but consider adding a state machine to prevent UX confusion.",
+    "delete_job permanently removes documents. hours_log entries referencing the job will then dangle. Consider soft-delete or cascading cleanup.",
+    "geocode_address uses a single Nominatim call with no retries/backoff/cache. Production should respect Nominatim's 1 req/sec policy and cache results by normalized address.",
+    "server.py reached 590 lines — close to the 700-line guideline. Consider splitting into routers (auth.py, jobs.py, teams.py, chat.py) before adding more features.",
+    "add_member doesn't verify the cleaner_id corresponds to an existing user with role cleaner/owner_cleaner. Owner could $addToSet any string."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_round2_features.py (created)"
+  ],
+  "success_rate": {"backend": "100% (46/46 — 30 regression + 16 round2)", "frontend": "smoke-only: testIDs verified, full tap-through deferred pending login-submit testID"},
+  "seed_data_creation": "Tests create TEST_-prefixed owner/cleaner users + jobs + one team per run via the public API. Admin (aestheticabodesyyc@gmail.com) auto-upgraded as before. No production data mutated.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/ -v` to execute both test_auto_abodes.py (round-1, 30 tests) and test_round2_features.py (round-2, 16 tests). BASE_URL comes from /app/frontend/.env EXPO_PUBLIC_BACKEND_URL. The geocoding test on Times Square may pytest.skip if Nominatim rate-limits the preview IP — this is expected and not a failure. For the UI tap-through, the auth screen's submit button needs a testID before reliable end-to-end scripting (use testID='login-submit'). All ops/teams testIDs (operations-card, start-/done-/cancel-/delete-/assign-/assign-pick-<id>, new-team-button, team-name-input, create-team-button, add-member-/pick-<id>) are confirmed wired in the code.",
+  "rca_of_issue": "N/A — no functional bugs surfaced. The auth submit testID gap is the only friction blocking deterministic UI automation."
+}

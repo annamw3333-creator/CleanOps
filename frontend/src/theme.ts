@@ -25,12 +25,14 @@ export const statusColors = {
   pending: "#D64045",     // red
   in_progress: "#D4AF37", // yellow/gold
   completed: "#2B7043",   // green
+  cancelled: "#A39E93",   // greige/muted
 };
 
 export const statusLabels = {
   pending: "Pending",
   in_progress: "In Progress",
   completed: "Completed",
+  cancelled: "Cancelled",
 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, "2xl": 32, "3xl": 48 };

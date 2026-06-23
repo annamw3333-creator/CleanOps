@@ -57,6 +57,20 @@ export default function Dashboard() {
           <Button title="Post a New Job" icon="add-circle-outline" onPress={() => router.push("/post-job")} testID="post-job-button" />
         )}
 
+        {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
+          <Card onPress={() => router.push("/operations")} testID="operations-card"
+            style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceInverse, borderColor: colors.surfaceInverse }}>
+            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#ffffff22", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="speedometer-outline" size={22} color={colors.gold} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: colors.onSurfaceInverse }}>Operations Dashboard</Text>
+              <Text style={{ fontSize: 12.5, color: "#ffffff99" }}>Assign, start, complete & manage all jobs</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#ffffff99" />
+          </Card>
+        )}
+
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Text style={styles.section}>{isCleaner ? "Today's Agenda" : "Active Jobs"}</Text>
           <Pressable onPress={() => router.push("/(tabs)/jobs")}><Text style={styles.link}>View all</Text></Pressable>
