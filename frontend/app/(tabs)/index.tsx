@@ -1,0 +1,121 @@
+import React, { useCallback, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from "react-native";
+import { useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useAuth } from "@/src/AuthContext";
+import { api } from "@/src/api";
+import { Screen, Header, Card, Button, StatusPill, EmptyState, Avatar, colors, spacing, radius } from "@/src/components/UI";
+
+export default function Dashboard() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const [stats, setStats] = useState<any>(null);
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const isCleaner = user?.role === "cleaner";
+
+  const load = useCallback(async () => {
+    try {
+      const s = await api.get("/stats");
+      setStats(s);
+      const scope = isCleaner ? "assigned" : "mine";
+      const j = await api.get(`/jobs?scope=${scope}`);
+      setJobs(j);
+    } catch {}
+  }, [isCleaner]);
+
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+
+  const upcoming = jobs.filter((j) => j.status !== "completed").slice(0, 5);
+
+  return (
+    <Screen>
+      <Header title={`Hi, ${user?.name?.split(" ")[0] || "there"}`} subtitle={isCleaner ? "Your work at a glance" : "Your command center"} />
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100, gap: spacing.lg }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+
+        {isCleaner ? (
+          <View style={styles.statsRow}>
+            <StatCard icon="time-outline" label="Hours" value={stats?.total_hours ?? 0} color={colors.brand} />
+            <StatCard icon="cash-outline" label="Earnings" value={`$${stats?.total_pay ?? 0}`} color={colors.sageDeep} />
+            <StatCard icon="briefcase-outline" label="Upcoming" value={stats?.upcoming ?? 0} color={colors.gold} />
+          </View>
+        ) : (
+          <View style={styles.statsRow}>
+            <StatCard icon="ellipse" label="Pending" value={stats?.pending ?? 0} color={colors.error} />
+            <StatCard icon="ellipse" label="In Progress" value={stats?.in_progress ?? 0} color={colors.gold} />
+            <StatCard icon="ellipse" label="Completed" value={stats?.completed ?? 0} color={colors.success} />
+          </View>
+        )}
+
+        {!isCleaner && (
+          <Button title="Post a New Job" icon="add-circle-outline" onPress={() => router.push("/post-job")} testID="post-job-button" />
+        )}
+
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Text style={styles.section}>{isCleaner ? "Today's Agenda" : "Active Jobs"}</Text>
+          <Pressable onPress={() => router.push("/(tabs)/jobs")}><Text style={styles.link}>View all</Text></Pressable>
+        </View>
+
+        {upcoming.length === 0 ? (
+          <Card><EmptyState icon="calendar-outline" title="No active jobs"
+            subtitle={isCleaner ? "Check the map for available jobs you qualify for." : "Post a job to get started."} /></Card>
+        ) : upcoming.map((j) => <JobRow key={j.job_id} job={j} onPress={() => router.push(`/job/${j.job_id}`)} />)}
+      </ScrollView>
+    </Screen>
+  );
+}
+
+function StatCard({ icon, label, value, color }: any) {
+  return (
+    <View style={styles.statCard}>
+      <Ionicons name={icon} size={18} color={color} />
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+export function JobRow({ job, onPress }: { job: any; onPress: () => void }) {
+  return (
+    <Card onPress={onPress} testID={`job-card-${job.job_id}`} style={{ gap: spacing.sm }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <View style={{ flex: 1, marginRight: spacing.sm }}>
+          <Text style={styles.jobTitle}>{job.title}</Text>
+          <Text style={styles.jobMeta} numberOfLines={1}><Ionicons name="location-outline" size={12} color={colors.muted} /> {job.address}</Text>
+        </View>
+        <StatusPill status={job.status} small />
+      </View>
+      <View style={{ flexDirection: "row", gap: spacing.lg }}>
+        <Text style={styles.jobMeta}><Ionicons name="calendar-outline" size={12} color={colors.muted} /> {job.date}</Text>
+        <Text style={styles.jobMeta}><Ionicons name="time-outline" size={12} color={colors.muted} /> {job.start_window_from}–{job.start_window_to}</Text>
+      </View>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <View style={styles.typeTag}><Text style={styles.typeTagText}>{job.clean_type} clean</Text></View>
+        {job.assigned_cleaners_info?.length > 0 && (
+          <View style={{ flexDirection: "row" }}>
+            {job.assigned_cleaners_info.slice(0, 3).map((c: any, i: number) => (
+              <View key={c.user_id} style={{ marginLeft: i ? -8 : 0 }}><Avatar uri={c.avatar} name={c.name} size={26} /></View>
+            ))}
+          </View>
+        )}
+      </View>
+    </Card>
+  );
+}
+
+const styles = StyleSheet.create({
+  statsRow: { flexDirection: "row", gap: spacing.sm },
+  statCard: { flex: 1, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, gap: 4 },
+  statValue: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
+  statLabel: { fontSize: 12, color: colors.muted },
+  section: { fontSize: 18, fontWeight: "700", color: colors.onSurface },
+  link: { fontSize: 14, color: colors.brand, fontWeight: "600" },
+  jobTitle: { fontSize: 16, fontWeight: "700", color: colors.onSurface },
+  jobMeta: { fontSize: 12.5, color: colors.muted },
+  typeTag: { backgroundColor: colors.sage, paddingVertical: 3, paddingHorizontal: 10, borderRadius: radius.pill },
+  typeTagText: { fontSize: 11, fontWeight: "700", color: colors.onSurface, textTransform: "capitalize" },
+});
