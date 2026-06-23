@@ -33,6 +33,10 @@ Marketplace for cleaning companies, homeowners & landlords to find qualified cle
 - P2: Owner live map of all assigned jobs as dedicated admin view; ratings/reviews (Homestars-style); push notifications (on request); chat realtime via websockets; modularize server.py; login rate-limiting.
 
 ## Next Tasks
+- Onboarding/welcome packages with quizzes + % completion (owner creates/uploads SOP docs; cleaners complete in-app; staff profile shows % done).
+- Client feedback + shareable public rating link (no-login) that employers can forward to the rated cleaner.
+- Calendar sync (recommended: expo-calendar to write shifts to the device calendar, which syncs to Google/Samsung/iCloud per device account; needs a native build to test).
+- Verify pay/tax + reviews via testing_agent.
 - Wire Stripe checkout for tiers; add Teams management screen; geocode addresses on Post Job.
 
 ## Test Credentials

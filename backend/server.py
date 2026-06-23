@@ -13,6 +13,7 @@ from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
 import httpx
 import stripe
+from tax_data import PROVINCES, PAY_FREQUENCIES, compute_paystub, TAX_YEAR
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -390,6 +391,39 @@ async def list_users(user=Depends(get_current_user)):
         result.append({"user_id": u["user_id"], "name": u["name"], "role": u["role"], "avatar": u.get("avatar", ""),
                        "completed_count": cc})
     return result
+
+@api_router.get("/users/{user_id}")
+async def get_public_user(user_id: str, user=Depends(get_current_user)):
+    u = await db.users.find_one({"user_id": user_id})
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "user_id": u["user_id"], "name": u["name"], "role": u["role"], "avatar": u.get("avatar", ""),
+        "phone": u.get("phone", ""), "bio": u.get("bio", ""), "experience_summary": u.get("experience_summary", ""),
+        "portfolio": u.get("portfolio", []), "qualifications": u.get("qualifications", []),
+        "hourly_rate": u.get("hourly_rate", 0), "availability": u.get("availability", []),
+        "completed_count": await completed_count(user_id), "member_since": iso(u.get("created_at")),
+    }
+
+class PayrollIn(BaseModel):
+    province: str
+    hourly_rate: float
+    hours_per_week: float
+    pay_frequency: Literal["weekly", "biweekly", "semimonthly", "monthly"] = "biweekly"
+    worker_type: Literal["employee", "freelancer", "subcontractor"] = "employee"
+
+@api_router.get("/payroll/provinces")
+async def payroll_provinces(user=Depends(get_current_user)):
+    return {"tax_year": TAX_YEAR,
+            "provinces": [{"code": k, "name": v["name"]} for k, v in sorted(PROVINCES.items(), key=lambda x: x[1]["name"])],
+            "pay_frequencies": list(PAY_FREQUENCIES.keys())}
+
+@api_router.post("/payroll/calculate")
+async def payroll_calculate(body: PayrollIn, user=Depends(get_current_user)):
+    try:
+        return compute_paystub(body.province, body.hourly_rate, body.hours_per_week, body.pay_frequency, body.worker_type)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 # ---------------- Jobs ----------------
 async def enrich_job(job: dict):

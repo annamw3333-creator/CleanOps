@@ -71,6 +71,17 @@ export default function Dashboard() {
           </Card>
         )}
 
+        <Card onPress={() => router.push(`/employee/${user?.user_id}`)} testID="payroll-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="calculator-outline" size={20} color={colors.brand} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Pay & Tax Calculator</Text>
+            <Text style={{ fontSize: 12, color: colors.muted }}>Estimate pay stubs & deductions (Canada 2026)</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </Card>
+
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Text style={styles.section}>{isCleaner ? "Today's Agenda" : "Active Jobs"}</Text>
           <Pressable onPress={() => router.push("/(tabs)/jobs")}><Text style={styles.link}>View all</Text></Pressable>

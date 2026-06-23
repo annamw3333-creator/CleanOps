@@ -54,10 +54,12 @@ export default function Teams() {
             {t.members_info?.length > 0 ? (
               <View style={{ gap: spacing.sm }}>
                 {t.members_info.map((m: any) => (
-                  <View key={m.user_id} style={styles.member}>
+                  <Pressable key={m.user_id} onPress={() => router.push(`/employee/${m.user_id}`)} style={styles.member} testID={`member-${m.user_id}`}>
                     <Avatar uri={m.avatar} name={m.name} size={36} />
                     <Text style={styles.memberName}>{m.name}</Text>
-                  </View>
+                    <View style={{ flex: 1 }} />
+                    <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                  </Pressable>
                 ))}
               </View>
             ) : <Text style={styles.hint}>No members yet.</Text>}
