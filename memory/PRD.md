@@ -16,7 +16,6 @@ Marketplace for cleaning companies, homeowners & landlords to find qualified cle
 - Admin (aestheticabodesyyc@gmail.com): full access, business tier, no ads — auto-granted on login.
 
 ## Implemented (2026-06-23)
-- Auth: email/password + Emergent Google OAuth; role selection incl. Owner+Cleaner.
 - Role-based bottom tabs: Home, Map, Jobs, Chat, Profile.
 - Dashboards with stats; ad banner on free tier.
 - Live job map color-coded by status + filters + pin peek card.

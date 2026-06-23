@@ -36,7 +36,7 @@ export default function Operations() {
     Haptics.selectionAsync().catch(() => {});
     try { await api.post(`/jobs/${jobId}/status`, { status }); await load(); } catch {}
   };
-  const remove = async (jobId: string) => { try { await (api as any).get; await fetchDelete(jobId); await load(); } catch {} };
+  const remove = async (jobId: string) => { try { await fetchDelete(jobId); await load(); } catch {} };
   const fetchDelete = async (jobId: string) => {
     const { getToken } = await import("@/src/api");
     const token = await getToken();
