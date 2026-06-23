@@ -1,0 +1,44 @@
+{
+  "summary": "Round-3 backend testing for Auto Abodes Stripe billing. Added /app/backend/tests/test_billing.py (11 new tests) and re-ran the full backend suite. Results: 57/57 passed (100%) — 30 round-1 + 16 round-2 + 11 round-3 billing. Verified: (1) POST /api/billing/checkout {tier:pro} returns 200 with checkout_url starting with https://checkout.stripe.com and session_id starting with cs_test_; (2) POST /api/billing/checkout {tier:business} works identically; (3) Auth required — 401 without bearer; (4) Invalid tiers ('free', 'gold') correctly rejected with 422 by Pydantic Literal['pro','business']; (5) Second pro checkout call returns a brand-new cs_test_ session id (Stripe Price lookup_key reused, no duplicate-price error — confirmed via backend log showing only ONE Price.create call across the full run, subsequent calls hit Price.list(lookup_keys=[...]) cache); (6) payment_transactions rows are upserted with status='pending', correct user_id, tier, currency='usd', amount=1900 (pro) / 4900 (business) — verified by direct MongoDB query; (7) GET /api/billing/status/{session_id} returns payment_status='unpaid' and paid=false for a fresh untouched session, and does NOT mutate the user's tier (owner stays free with ads_enabled=true); (8) Status endpoint requires auth (401 without token). Regression PASSED: POST /api/subscription/upgrade {tier:free} still downgrades + sets ads_enabled=true; admin (aestheticabodesyyc@gmail.com) auto-resolves to role=admin, tier=business, ads_enabled=false. Core auth, jobs lifecycle (apply/assign/checkin/checklist/complete), teams CRUD, operations status/delete, and Nominatim geocoding all still green.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_billing.py",
+    "/app/backend/tests/test_round2_features.py",
+    "/app/backend/tests/test_auto_abodes.py",
+    "/app/test_reports/pytest/billing_results.xml",
+    "/app/test_reports/pytest/full_round3_results.xml"
+  ],
+  "action_items": [
+    "(Optional, non-blocking) Real card payment completion cannot be automated against hosted Stripe Checkout. To validate the paid -> tier upgrade branch end-to-end, either (a) configure a Stripe webhook in test mode and POST a signed checkout.session.completed event, or (b) add a backend admin/test-only endpoint to simulate paid status. Currently the paid branch is exercised only by code inspection.",
+    "(Optional) Consider caching the stripe.Price.list lookup result across worker restarts — _price_cache is a module-level dict that resets on reload. Not a correctness issue (lookup_key dedupes on Stripe side) but trims one Stripe API hit per cold start.",
+    "(Tracked from iter_2, still open) Add testID='login-submit' on the Sign In submit button to unblock deterministic Playwright UI automation. Not in scope for this iteration (backend-only)."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py L322-330 billing_status: the 'paid' upgrade is keyed on the CURRENT bearer-token user, not on the user_id stored in metadata/payment_transactions. A malicious user who somehow obtained another user's session_id could call /billing/status/{that_session_id} with their own token and upgrade THEIR OWN tier on someone else's payment. Recommend resolving target user_id from the txn document or s.metadata.user_id and rejecting (403) if it mismatches the authenticated user.",
+    "/app/backend/server.py L37-52 get_price_id has no concurrency guard. Two simultaneous first-time pro checkouts could both miss the cache, call Price.list, miss, and both call Product.create + Price.create. Stripe will de-dupe the price by lookup_key (the second Price.create will raise), bubbling a 500 to one of the two clients. Wrap in an asyncio.Lock keyed by tier or catch IdempotencyError/InvalidRequestError and re-list.",
+    "/app/backend/server.py L296-304 success_url uses an f-string containing '{CHECKOUT_SESSION_ID}' — that brace literal IS valid Stripe templating, but because the surrounding f-string requires doubled braces, the current code DOES emit the correct literal '{CHECKOUT_SESSION_ID}' (single braces) — verified visually. Worth a unit test or comment to prevent a future refactor breaking it.",
+    "STRIPE_API_KEY is a live-looking sk_test_ key committed to /app/backend/.env. That is fine for the preview env, but ensure prod deploy pipeline overrides it via secret manager and never commits the prod key.",
+    "server.py is now ~660 lines (up from 590). Strongly consider splitting into routers (auth.py, jobs.py, teams.py, billing.py, chat.py) before adding more features — exceeds the project-style 700-line guideline soon."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_billing.py (created)"
+  ],
+  "success_rate": {
+    "backend": "100% (57/57 — 30 round-1 + 16 round-2 + 11 round-3 billing)",
+    "frontend": "skipped per request (backend-only iteration)"
+  },
+  "seed_data_creation": "Tests create TEST_-prefixed owner users + 6 pending payment_transactions rows (3 pro @ 1900¢, 2 business @ 4900¢) per run via real Stripe test-mode Checkout. No production data mutated. Admin (aestheticabodesyyc@gmail.com) auto-upgraded by ensure_admin as designed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/ -v` to execute all 57 tests (test_auto_abodes.py round-1, test_round2_features.py round-2, test_billing.py round-3). BASE_URL from /app/frontend/.env EXPO_PUBLIC_BACKEND_URL. Stripe test mode key in /app/backend/.env STRIPE_API_KEY. NOTE: each billing test run actually hits the real Stripe sandbox and leaves stub Checkout sessions + pending payment_transactions rows behind — these are expected and harmless (sessions auto-expire on Stripe's side; you can prune via `db.payment_transactions.delete_many({status:'pending'})` if needed). The paid->upgrade branch is NOT covered by automation and requires either a webhook or a manual completion of a Stripe-hosted checkout — flagged in action_items. The cross-user upgrade risk noted in critical_code_review_comments is the most important code-review finding to surface to the main agent.",
+  "rca_of_issue": "N/A — no functional bugs surfaced this iteration. All Stripe billing endpoints behave per spec on the unpaid path. The paid path is unreachable without a real card or webhook simulation."
+}
