@@ -656,19 +656,24 @@ async def review_cleaner(job_id: str, body: ReviewIn, user=Depends(get_current_u
         raise HTTPException(status_code=400, detail="That cleaner was not assigned to this job")
     await db.reviews.update_one(
         {"job_id": job_id, "cleaner_id": body.cleaner_id, "reviewer_id": user["user_id"]},
-        {"$set": {
-            "review_id": f"rev_{uuid.uuid4().hex[:10]}",
-            "job_id": job_id, "job_title": job.get("title"),
-            "cleaner_id": body.cleaner_id, "reviewer_id": user["user_id"],
-            "reviewer_name": user["name"], "rating": body.rating,
-            "comment": body.comment or "", "created_at": now_utc(),
-        }},
+        {
+            "$set": {
+                "job_title": job.get("title"),
+                "reviewer_name": user["name"], "rating": body.rating,
+                "comment": body.comment or "", "updated_at": now_utc(),
+            },
+            "$setOnInsert": {
+                "review_id": f"rev_{uuid.uuid4().hex[:10]}",
+                "job_id": job_id, "cleaner_id": body.cleaner_id,
+                "reviewer_id": user["user_id"], "created_at": now_utc(),
+            },
+        },
         upsert=True,
     )
     # recompute aggregate
     revs = await db.reviews.find({"cleaner_id": body.cleaner_id}).to_list(1000)
     count = len(revs)
-    avg = round(sum(r["rating"] for r in revs) / count, 2) if count else 0
+    avg = round(sum(r["rating"] for r in revs) / count, 1) if count else 0
     await db.users.update_one({"user_id": body.cleaner_id}, {"$set": {"avg_rating": avg, "review_count": count}})
     return {"avg_rating": avg, "review_count": count}
 
