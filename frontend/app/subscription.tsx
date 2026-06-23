@@ -1,6 +1,8 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
-import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Platform } from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/src/AuthContext";
 import { api } from "@/src/api";
@@ -8,17 +10,65 @@ import { Screen, Header, Button, colors, spacing, radius } from "@/src/component
 import { SUBSCRIPTION_TIERS } from "@/src/theme";
 
 export default function Subscription() {
-  const { user, setUser } = useAuth();
+  const { user, setUser, refresh } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams<{ session_id?: string }>();
   const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState("");
   const current = user?.tier || "free";
   const isAdmin = user?.role === "admin";
 
-  const upgrade = async (tier: string) => {
-    setBusy(tier);
-    try { const res = await api.post("/subscription/upgrade", { tier }); setUser(res.user); }
+  // On web, Stripe redirects back here with ?session_id=...; confirm it.
+  useEffect(() => {
+    if (params.session_id) {
+      confirm(String(params.session_id));
+    }
+  }, [params.session_id]);
+
+  const confirm = async (sessionId: string) => {
+    setMsg("Confirming payment...");
+    for (let i = 0; i < 8; i++) {
+      try {
+        const res = await api.get(`/billing/status/${sessionId}`);
+        if (res.paid) { setUser(res.user); setMsg("✓ Payment confirmed — you're upgraded!"); return; }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    setMsg("Payment still processing. Pull to refresh shortly.");
+  };
+
+  const downgrade = async () => {
+    setBusy("free");
+    try { const res = await api.post("/subscription/upgrade", { tier: "free" }); setUser(res.user); }
     catch {} finally { setBusy(""); }
   };
+
+  const checkout = async (tier: string) => {
+    setBusy(tier); setMsg("");
+    try {
+      const redirectUrl = Platform.OS === "web"
+        ? window.location.origin + "/subscription"
+        : Linking.createURL("subscription");
+      const res = await api.post("/billing/checkout", { tier, redirect_url: redirectUrl });
+      if (Platform.OS === "web") {
+        window.location.href = res.checkout_url;
+        return;
+      }
+      const result = await WebBrowser.openAuthSessionAsync(res.checkout_url, redirectUrl);
+      if (result.type === "success" && result.url) {
+        const parsed = Linking.parse(result.url);
+        const sid = String(parsed.queryParams?.session_id || res.session_id);
+        await confirm(sid);
+      } else {
+        // browser closed — verify anyway in case payment completed
+        await confirm(res.session_id);
+        await refresh();
+      }
+    } catch (e: any) { setMsg(e.message || "Checkout failed"); }
+    finally { setBusy(""); }
+  };
+
+  const onSelect = (tier: string) => { if (tier === "free") downgrade(); else checkout(tier); };
 
   return (
     <Screen>
@@ -30,6 +80,7 @@ export default function Subscription() {
             <Text style={styles.adminText}>Admin account — all features unlocked, ad-free.</Text>
           </View>
         )}
+        {msg ? <Text style={styles.msg} testID="billing-msg">{msg}</Text> : null}
         {SUBSCRIPTION_TIERS.map((t) => {
           const active = current === t.id;
           return (
@@ -55,13 +106,13 @@ export default function Subscription() {
               {active ? (
                 <View style={styles.currentBadge}><Ionicons name="checkmark" size={16} color={colors.success} /><Text style={styles.currentText}>Current plan</Text></View>
               ) : (
-                <Button title={t.id === "free" ? "Downgrade" : `Upgrade to ${t.name}`} onPress={() => upgrade(t.id)} loading={busy === t.id}
+                <Button title={t.id === "free" ? "Downgrade to Free" : `Upgrade to ${t.name}`} onPress={() => onSelect(t.id)} loading={busy === t.id}
                   variant={t.id === "business" ? "secondary" : "primary"} testID={`upgrade-${t.id}`} />
               )}
             </View>
           );
         })}
-        <Text style={styles.note}>Simulated checkout — connect Stripe to charge real subscriptions.</Text>
+        <Text style={styles.note}>Secure checkout by Stripe · test mode. Use card 4242 4242 4242 4242.</Text>
       </ScrollView>
     </Screen>
   );
@@ -70,6 +121,7 @@ export default function Subscription() {
 const styles = StyleSheet.create({
   adminCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceInverse, padding: spacing.md, borderRadius: radius.md },
   adminText: { color: colors.onSurfaceInverse, fontWeight: "600", fontSize: 13, flex: 1 },
+  msg: { fontSize: 14, fontWeight: "600", color: colors.brand, textAlign: "center" },
   card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   tierName: { fontSize: 20, fontWeight: "800", color: colors.onSurface },

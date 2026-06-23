@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
 import httpx
+import stripe
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -28,6 +29,27 @@ logger = logging.getLogger(__name__)
 
 EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 ADMIN_EMAIL = "aestheticabodesyyc@gmail.com"
+
+stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
+TIER_PRICING = {"pro": 1900, "business": 4900}  # cents / month
+_price_cache: dict = {}
+
+async def get_price_id(tier: str) -> str:
+    if tier in _price_cache:
+        return _price_cache[tier]
+    amount = TIER_PRICING[tier]
+    lookup = f"auto_abodes_{tier}_monthly"
+    existing = stripe.Price.list(lookup_keys=[lookup], limit=1)
+    if existing.data:
+        _price_cache[tier] = existing.data[0].id
+        return existing.data[0].id
+    product = stripe.Product.create(name=f"Auto Abodes {tier.capitalize()}")
+    price = stripe.Price.create(
+        product=product.id, unit_amount=amount, currency="usd",
+        recurring={"interval": "month"}, lookup_key=lookup,
+    )
+    _price_cache[tier] = price.id
+    return price.id
 
 async def ensure_admin(user: dict) -> dict:
     if user and user.get("email") == ADMIN_EMAIL and (user.get("role") != "admin" or user.get("tier") != "business"):
@@ -261,6 +283,53 @@ async def upgrade_subscription(body: SubscriptionIn, user=Depends(get_current_us
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"tier": body.tier}})
     updated = await db.users.find_one({"user_id": user["user_id"]})
     return {"user": with_perks(clean(dict(updated)))}
+
+class CheckoutIn(BaseModel):
+    tier: Literal["pro", "business"]
+    redirect_url: str
+
+@api_router.post("/billing/checkout")
+async def create_checkout(body: CheckoutIn, user=Depends(get_current_user)):
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Billing not configured")
+    price_id = await get_price_id(body.tier)
+    session = stripe.checkout.Session.create(
+        mode="subscription",
+        line_items=[{"price": price_id, "quantity": 1}],
+        success_url=f"{body.redirect_url}?session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{body.redirect_url}?canceled=1",
+        customer_email=user["email"],
+        metadata={"user_id": user["user_id"], "tier": body.tier},
+        subscription_data={"metadata": {"user_id": user["user_id"], "tier": body.tier}},
+    )
+    await db.payment_transactions.update_one(
+        {"stripe_session_id": session.id},
+        {"$setOnInsert": {
+            "stripe_session_id": session.id, "user_id": user["user_id"],
+            "tier": body.tier, "amount": TIER_PRICING[body.tier], "currency": "usd",
+            "status": "pending", "created_at": now_utc(),
+        }},
+        upsert=True,
+    )
+    return {"checkout_url": session.url, "session_id": session.id}
+
+@api_router.get("/billing/status/{session_id}")
+async def billing_status(session_id: str, user=Depends(get_current_user)):
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Billing not configured")
+    s = stripe.checkout.Session.retrieve(session_id)
+    txn = await db.payment_transactions.find_one({"stripe_session_id": session_id})
+    paid = s.payment_status == "paid"
+    if paid and txn and txn.get("status") != "paid":
+        tier = (s.metadata or {}).get("tier") or (txn or {}).get("tier")
+        await db.payment_transactions.update_one(
+            {"stripe_session_id": session_id, "status": {"$ne": "paid"}},
+            {"$set": {"status": "paid", "subscription_id": s.subscription, "updated_at": now_utc()}},
+        )
+        if tier:
+            await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"tier": tier}})
+    updated = await db.users.find_one({"user_id": user["user_id"]})
+    return {"payment_status": s.payment_status, "paid": paid, "user": with_perks(clean(dict(updated)))}
 
 @api_router.post("/auth/logout")
 async def logout(authorization: Optional[str] = Header(None)):
