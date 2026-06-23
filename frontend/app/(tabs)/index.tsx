@@ -71,6 +71,17 @@ export default function Dashboard() {
           </Card>
         )}
 
+        <Card onPress={() => router.push("/onboarding")} testID="onboarding-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="school-outline" size={20} color={colors.brand} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>{isCleaner ? "Onboarding & Training" : "Onboarding Builder"}</Text>
+            <Text style={{ fontSize: 12, color: colors.muted }}>{isCleaner ? "Complete SOPs & quizzes" : "Create SOP docs & quizzes"}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </Card>
+
         <Card onPress={() => router.push(`/employee/${user?.user_id}`)} testID="payroll-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
           <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="calculator-outline" size={20} color={colors.brand} />

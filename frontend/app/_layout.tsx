@@ -34,6 +34,8 @@ export default function RootLayout() {
             <Stack.Screen name="chat/[id]" />
             <Stack.Screen name="post-job" options={{ presentation: "modal" }} />
             <Stack.Screen name="employee/[id]" />
+            <Stack.Screen name="onboarding" />
+            <Stack.Screen name="feedback/[token]" />
             <Stack.Screen name="subscription" options={{ presentation: "modal" }} />
             <Stack.Screen name="teams" />
             <Stack.Screen name="operations" />

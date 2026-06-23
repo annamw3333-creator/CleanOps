@@ -403,6 +403,7 @@ async def get_public_user(user_id: str, user=Depends(get_current_user)):
         "portfolio": u.get("portfolio", []), "qualifications": u.get("qualifications", []),
         "hourly_rate": u.get("hourly_rate", 0), "availability": u.get("availability", []),
         "completed_count": await completed_count(user_id), "member_since": iso(u.get("created_at")),
+        "onboarding_pct": await onboarding_pct(user_id),
     }
 
 class PayrollIn(BaseModel):
@@ -782,6 +783,111 @@ async def get_reviews(cleaner_id: str, user=Depends(get_current_user)):
 @api_router.get("/")
 async def root():
     return {"message": "AbodeOps API"}
+
+# ---------------- Onboarding & Quizzes ----------------
+class QuizQuestion(BaseModel):
+    q: str
+    options: List[str]
+    answer: int
+
+class OnboardingItemIn(BaseModel):
+    title: str
+    type: Literal["document", "quiz"]
+    content: Optional[str] = ""
+    questions: Optional[List[QuizQuestion]] = []
+
+@api_router.post("/onboarding")
+async def create_onboarding(body: OnboardingItemIn, user=Depends(get_current_user)):
+    if user["role"] not in ("company_owner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=403, detail="Only owners can create onboarding")
+    item_id = f"ob_{uuid.uuid4().hex[:10]}"
+    doc = {"item_id": item_id, "owner_id": user["user_id"], "title": body.title, "type": body.type,
+           "content": body.content or "", "questions": [q.dict() for q in (body.questions or [])],
+           "created_at": now_utc()}
+    await db.onboarding.insert_one(doc)
+    return clean(dict(doc))
+
+@api_router.get("/onboarding")
+async def list_onboarding(user=Depends(get_current_user)):
+    items = await db.onboarding.find().sort("created_at", 1).to_list(200)
+    out = []
+    for it in items:
+        it = clean(dict(it))
+        prog = await db.onboarding_progress.find_one({"cleaner_id": user["user_id"], "item_id": it["item_id"]})
+        it["completed"] = bool(prog and prog.get("completed"))
+        it["score"] = prog.get("score") if prog else None
+        it["total"] = prog.get("total") if prog else None
+        # hide answers from non-owners
+        if user["role"] not in ("company_owner", "owner_cleaner", "admin"):
+            for q in it.get("questions", []):
+                q.pop("answer", None)
+        out.append(it)
+    return out
+
+class OnboardingCompleteIn(BaseModel):
+    answers: Optional[List[int]] = []
+
+@api_router.post("/onboarding/{item_id}/complete")
+async def complete_onboarding(item_id: str, body: OnboardingCompleteIn, user=Depends(get_current_user)):
+    item = await db.onboarding.find_one({"item_id": item_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    score = total = None
+    if item["type"] == "quiz":
+        qs = item.get("questions", [])
+        total = len(qs)
+        score = sum(1 for i, q in enumerate(qs) if i < len(body.answers) and body.answers[i] == q.get("answer"))
+    await db.onboarding_progress.update_one(
+        {"cleaner_id": user["user_id"], "item_id": item_id},
+        {"$set": {"cleaner_id": user["user_id"], "item_id": item_id, "completed": True,
+                  "score": score, "total": total, "updated_at": now_utc()}},
+        upsert=True)
+    return {"completed": True, "score": score, "total": total}
+
+async def onboarding_pct(cleaner_id: str) -> int:
+    total = await db.onboarding.count_documents({})
+    if not total:
+        return 0
+    done = len(await db.onboarding_progress.find({"cleaner_id": cleaner_id, "completed": True}).to_list(500))
+    return round(done / total * 100)
+
+# ---------------- Client feedback link ----------------
+@api_router.post("/jobs/{job_id}/feedback-link")
+async def create_feedback_link(job_id: str, user=Depends(get_current_user)):
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job or (job["poster_id"] != user["user_id"] and user["role"] != "admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    token = job.get("feedback_token") or secrets.token_urlsafe(9)
+    await db.jobs.update_one({"job_id": job_id}, {"$set": {"feedback_token": token}})
+    return {"token": token}
+
+@api_router.get("/public/feedback/{token}")
+async def public_feedback_get(token: str):
+    job = await db.jobs.find_one({"feedback_token": token})
+    if not job:
+        raise HTTPException(status_code=404, detail="Invalid link")
+    cleaners = []
+    for cid in job.get("assigned_cleaners", []):
+        c = await db.users.find_one({"user_id": cid})
+        if c:
+            cleaners.append(c["name"])
+    return {"job_title": job.get("title"), "address": job.get("address"), "date": job.get("date"),
+            "cleaners": cleaners, "submitted": bool(job.get("client_feedback"))}
+
+class PublicFeedbackIn(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = ""
+    client_name: Optional[str] = ""
+
+@api_router.post("/public/feedback/{token}")
+async def public_feedback_post(token: str, body: PublicFeedbackIn):
+    job = await db.jobs.find_one({"feedback_token": token})
+    if not job:
+        raise HTTPException(status_code=404, detail="Invalid link")
+    await db.jobs.update_one({"job_id": job["job_id"]}, {"$set": {"client_feedback": {
+        "rating": body.rating, "comment": body.comment or "", "client_name": body.client_name or "Client",
+        "created_at": iso(now_utc())}}})
+    return {"ok": True}
 
 app.include_router(api_router)
 app.add_middleware(

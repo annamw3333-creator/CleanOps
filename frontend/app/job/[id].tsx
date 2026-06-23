@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import * as Calendar from "expo-calendar";
+import { Platform } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/src/AuthContext";
 import { api } from "@/src/api";
@@ -73,6 +75,19 @@ export default function JobDetail() {
   const doneCount = checklist.filter((i: any) => i.done).length;
   const allDone = checklist.length > 0 && checklist.every((i: any) => i.done);
   const myResp = job.cleaner_responses?.[user?.user_id || ""];
+  const addToCalendar = async () => {
+    if (Platform.OS === "web") { alert("Calendar sync works on the mobile app."); return; }
+    try {
+      const start = new Date(`${job.date}T${(job.start_window_from || "09:00")}:00`);
+      const end = new Date(start.getTime() + (job.estimated_duration || 1) * 3600000);
+      await Calendar.createEventInCalendarAsync({ title: `Clean: ${job.title}`, location: job.address, startDate: start, endDate: end, notes: job.manager_notes || "" });
+    } catch { alert("Could not open calendar."); }
+  };
+  const getFeedbackLink = () => act(async () => {
+    const r = await api.post(`/jobs/${id}/feedback-link`);
+    const base = (process.env.EXPO_PUBLIC_BACKEND_URL || "").replace(/\/$/, "");
+    alert(`Share this link with the client:\n\n${base}/feedback/${r.token}`);
+  });
   const respond = (action: "accept" | "decline" | "info") => act(async () => {
     if (action === "info") {
       const c = await api.post("/conversations", { participant_id: job.poster_id });
@@ -220,6 +235,21 @@ export default function JobDetail() {
         {job.status === "completed" && isPoster && job.assigned_cleaners_info?.length > 0 && (
           <Button title="Rate Cleaner" icon="star" variant="secondary" onPress={() => setReviewing(true)} testID="rate-cleaner-button" />
         )}
+        {isAssigned && (job.status === "pending" || job.status === "in_progress") && (
+          <Button title="Add to My Calendar" icon="calendar-outline" variant="outline" onPress={addToCalendar} testID="add-calendar-button" />
+        )}
+        {isPoster && job.status === "completed" && (
+          <Button title="Get Client Feedback Link" icon="share-outline" variant="outline" onPress={getFeedbackLink} loading={busy} testID="feedback-link-button" />
+        )}
+        {job.client_feedback && (
+          <View style={styles.fbBox} testID="client-feedback">
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Ionicons name="star" size={14} color={colors.gold} />
+              <Text style={styles.fbRating}>{job.client_feedback.rating}/5 from {job.client_feedback.client_name}</Text>
+            </View>
+            {job.client_feedback.comment ? <Text style={styles.fbComment}>"{job.client_feedback.comment}"</Text> : null}
+          </View>
+        )}
       </View>
 
       <Modal visible={assignOpen} transparent animationType="slide" onRequestClose={() => setAssignOpen(false)}>
@@ -337,4 +367,7 @@ const styles = StyleSheet.create({
   reviewInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, minHeight: 60, fontSize: 14, color: colors.onSurface, textAlignVertical: "top" },
   reviewThanks: { fontSize: 14, fontWeight: "700", color: colors.success },
   assignPick: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, padding: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  fbBox: { backgroundColor: colors.sage + "55", borderRadius: radius.md, padding: spacing.md, gap: 4 },
+  fbRating: { fontSize: 13, fontWeight: "700", color: colors.onSurface },
+  fbComment: { fontSize: 13, color: colors.onSurface, fontStyle: "italic" },
 });
