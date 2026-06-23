@@ -128,6 +128,32 @@ export function AdBanner({ onUpgrade }: { onUpgrade: () => void }) {
   );
 }
 
+export function Stars({ value, size = 14, onChange, testIDPrefix }: { value: number; size?: number; onChange?: (v: number) => void; testIDPrefix?: string }) {
+  return (
+    <View style={{ flexDirection: "row", gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((i) => {
+        const name = value >= i ? "star" : value >= i - 0.5 ? "star-half" : "star-outline";
+        const star = <Ionicons name={name as any} size={size} color={colors.gold} />;
+        if (onChange) {
+          return <Pressable key={i} onPress={() => onChange(i)} hitSlop={6} testID={`${testIDPrefix || "star"}-${i}`}>{star}</Pressable>;
+        }
+        return <View key={i}>{star}</View>;
+      })}
+    </View>
+  );
+}
+
+export function RatingLabel({ rating, count, size = 13 }: { rating: number; count: number; size?: number }) {
+  if (!count) return <Text style={{ fontSize: size, color: colors.muted }}>No reviews yet</Text>;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+      <Ionicons name="star" size={size} color={colors.gold} />
+      <Text style={{ fontSize: size, fontWeight: "700", color: colors.onSurface }}>{rating.toFixed(1)}</Text>
+      <Text style={{ fontSize: size - 1, color: colors.muted }}>({count})</Text>
+    </View>
+  );
+}
+
 export { colors, spacing, radius };
 
 const styles = StyleSheet.create({

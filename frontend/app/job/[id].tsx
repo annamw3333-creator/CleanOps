@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Modal, TextInput } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -7,7 +7,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/src/AuthContext";
 import { api } from "@/src/api";
-import { Screen, Header, Card, Button, StatusPill, Avatar, colors, spacing, radius } from "@/src/components/UI";
+import { Screen, Header, Card, Button, StatusPill, Avatar, Stars, RatingLabel, colors, spacing, radius } from "@/src/components/UI";
 
 export default function JobDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -16,6 +16,9 @@ export default function JobDetail() {
   const [job, setJob] = useState<any>(null);
   const [tab, setTab] = useState<"info" | "checklist">("info");
   const [busy, setBusy] = useState(false);
+  const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [comments, setComments] = useState<Record<string, string>>({});
+  const [reviewDone, setReviewDone] = useState<Record<string, boolean>>({});
   const isCleaner = user?.role === "cleaner";
   const isAssigned = job?.assigned_cleaners?.includes(user?.user_id);
   const isPoster = job?.poster_id === user?.user_id;
@@ -43,6 +46,17 @@ export default function JobDetail() {
     await act(async () => { await api.post(`/jobs/${id}/checklist`, { item_id: itemId, photo_base64: b64 }); await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); });
   };
   const toggleTask = (itemId: string, done: boolean) => act(() => api.post(`/jobs/${id}/checklist`, { item_id: itemId, done: !done }));
+
+  const submitReview = async (cleanerId: string) => {
+    const rating = ratings[cleanerId] || 0;
+    if (!rating) return;
+    try {
+      await api.post(`/jobs/${id}/review`, { cleaner_id: cleanerId, rating, comment: comments[cleanerId] || "" });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setReviewDone((p) => ({ ...p, [cleanerId]: true }));
+      await load();
+    } catch (e: any) { alert(e.message); }
+  };
 
   const checklist = job.checklist || [];
   const allDone = checklist.length > 0 && checklist.every((i: any) => i.done);
@@ -88,7 +102,13 @@ export default function JobDetail() {
               <Card>
                 <Text style={styles.sectionTitle}>Assigned Cleaners</Text>
                 {job.assigned_cleaners_info.map((c: any) => (
-                  <View key={c.user_id} style={styles.person}><Avatar uri={c.avatar} name={c.name} size={36} /><Text style={styles.personName}>{c.name}</Text></View>
+                  <View key={c.user_id} style={styles.person}>
+                    <Avatar uri={c.avatar} name={c.name} size={36} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.personName}>{c.name}</Text>
+                      <RatingLabel rating={c.avg_rating || 0} count={c.review_count || 0} size={12} />
+                    </View>
+                  </View>
                 ))}
               </Card>
             )}
@@ -99,7 +119,11 @@ export default function JobDetail() {
                 {job.applicants_info.map((a: any) => (
                   <View key={a.user_id} style={styles.applicant}>
                     <View style={styles.person}><Avatar uri={a.avatar} name={a.name} size={36} />
-                      <View style={{ flex: 1 }}><Text style={styles.personName}>{a.name}</Text><Text style={styles.rate}>${a.hourly_rate}/hr · {a.qualifications.length} quals</Text></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.personName}>{a.name}</Text>
+                        <Text style={styles.rate}>${a.hourly_rate}/hr · {a.qualifications.length} quals</Text>
+                        <RatingLabel rating={a.avg_rating || 0} count={a.review_count || 0} size={12} />
+                      </View>
                     </View>
                     {a.bio ? <Text style={styles.bio}>{a.bio}</Text> : null}
                     <View style={{ flexDirection: "row", gap: spacing.sm }}>
@@ -160,7 +184,45 @@ export default function JobDetail() {
         {job.status === "completed" && (
           <View style={styles.completed}><Ionicons name="checkmark-circle" size={20} color={colors.success} /><Text style={styles.completedText}>Completed · {job.logged_hours}h logged{job.logged_pay ? ` · $${job.logged_pay}` : ""}</Text></View>
         )}
+        {job.status === "completed" && isPoster && job.assigned_cleaners_info?.length > 0 && (
+          <Button title="Rate Cleaner" icon="star" variant="secondary" onPress={() => setReviewing(true)} testID="rate-cleaner-button" />
+        )}
       </View>
+
+      <Modal visible={reviewing} transparent animationType="slide" onRequestClose={() => setReviewing(false)}>
+        <View style={styles.modalBg}>
+          <View style={styles.reviewModal}>
+            <View style={styles.reviewHeader}>
+              <Text style={styles.reviewTitle}>Rate your cleaner{job.assigned_cleaners_info?.length > 1 ? "s" : ""}</Text>
+              <Pressable onPress={() => setReviewing(false)} hitSlop={10}><Ionicons name="close" size={24} color={colors.onSurface} /></Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ gap: spacing.lg, paddingBottom: spacing.lg }}>
+              {(job.assigned_cleaners_info || []).map((c: any) => (
+                <View key={c.user_id} style={styles.reviewRow}>
+                  <View style={styles.person}>
+                    <Avatar uri={c.avatar} name={c.name} size={40} />
+                    <Text style={styles.personName}>{c.name}</Text>
+                  </View>
+                  {reviewDone[c.user_id] ? (
+                    <Text style={styles.reviewThanks}>✓ Thanks for your review!</Text>
+                  ) : (
+                    <>
+                      <Stars value={ratings[c.user_id] || 0} size={32} testIDPrefix={`rate-${c.user_id}`}
+                        onChange={(v) => setRatings((p) => ({ ...p, [c.user_id]: v }))} />
+                      <TextInput
+                        value={comments[c.user_id] || ""} onChangeText={(t) => setComments((p) => ({ ...p, [c.user_id]: t }))}
+                        placeholder="Add a comment (optional)" placeholderTextColor={colors.muted} multiline
+                        style={styles.reviewInput} testID={`review-comment-${c.user_id}`} />
+                      <Button title="Submit Review" onPress={() => submitReview(c.user_id)} disabled={!ratings[c.user_id]}
+                        style={{ height: 44 }} testID={`submit-review-${c.user_id}`} />
+                    </>
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -208,4 +270,11 @@ const styles = StyleSheet.create({
   actionBar: { position: "absolute", bottom: 0, left: 0, right: 0, padding: spacing.lg, paddingBottom: spacing.xl, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.xs },
   completed: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   completedText: { fontSize: 14, fontWeight: "700", color: colors.success },
+  modalBg: { flex: 1, backgroundColor: "#0008", justifyContent: "flex-end" },
+  reviewModal: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, paddingBottom: spacing["2xl"], maxHeight: "85%" },
+  reviewHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg },
+  reviewTitle: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
+  reviewRow: { gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
+  reviewInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, minHeight: 60, fontSize: 14, color: colors.onSurface, textAlignVertical: "top" },
+  reviewThanks: { fontSize: 14, fontWeight: "700", color: colors.success },
 });

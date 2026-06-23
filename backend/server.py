@@ -43,7 +43,7 @@ async def get_price_id(tier: str) -> str:
     if existing.data:
         _price_cache[tier] = existing.data[0].id
         return existing.data[0].id
-    product = stripe.Product.create(name=f"Auto Abodes {tier.capitalize()}")
+    product = stripe.Product.create(name=f"AbodeOps {tier.capitalize()}")
     price = stripe.Price.create(
         product=product.id, unit_amount=amount, currency="usd",
         recurring={"interval": "month"}, lookup_key=lookup,
@@ -173,6 +173,11 @@ class JobIn(BaseModel):
 
 class MessageIn(BaseModel):
     text: str
+
+class ReviewIn(BaseModel):
+    cleaner_id: str
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = ""
 
 class JobStatusIn(BaseModel):
     status: Literal["pending", "in_progress", "completed", "cancelled"]
@@ -357,7 +362,8 @@ async def geocode(address: str, user=Depends(get_current_user)):
 @api_router.get("/users")
 async def list_users(user=Depends(get_current_user)):
     users = await db.users.find({"user_id": {"$ne": user["user_id"]}}).to_list(200)
-    return [{"user_id": u["user_id"], "name": u["name"], "role": u["role"], "avatar": u.get("avatar", "")} for u in users]
+    return [{"user_id": u["user_id"], "name": u["name"], "role": u["role"], "avatar": u.get("avatar", ""),
+             "avg_rating": round(u.get("avg_rating", 0), 1), "review_count": u.get("review_count", 0)} for u in users]
 
 # ---------------- Jobs ----------------
 async def enrich_job(job: dict):
@@ -366,7 +372,8 @@ async def enrich_job(job: dict):
     for cid in job.get("assigned_cleaners", []):
         c = await db.users.find_one({"user_id": cid})
         if c:
-            assigned.append({"user_id": c["user_id"], "name": c["name"], "avatar": c.get("avatar", "")})
+            assigned.append({"user_id": c["user_id"], "name": c["name"], "avatar": c.get("avatar", ""),
+                             "avg_rating": round(c.get("avg_rating", 0), 1), "review_count": c.get("review_count", 0)})
     job["assigned_cleaners_info"] = assigned
     return job
 
@@ -434,7 +441,8 @@ async def get_job(job_id: str, user=Depends(get_current_user)):
         if c:
             apps.append({"user_id": c["user_id"], "name": c["name"], "avatar": c.get("avatar", ""),
                          "qualifications": c.get("qualifications", []), "hourly_rate": c.get("hourly_rate", 0),
-                         "bio": c.get("bio", "")})
+                         "bio": c.get("bio", ""),
+                         "avg_rating": round(c.get("avg_rating", 0), 1), "review_count": c.get("review_count", 0)})
     enriched["applicants_info"] = apps
     return enriched
 
@@ -637,9 +645,48 @@ async def send_message(conv_id: str, body: MessageIn, user=Depends(get_current_u
     await db.conversations.update_one({"conv_id": conv_id}, {"$set": {"last_message": body.text, "updated_at": now_utc()}})
     return {"message_id": msg_id, "conv_id": conv_id, "sender_id": user["user_id"], "text": body.text, "created_at": iso(doc["created_at"])}
 
+@api_router.post("/jobs/{job_id}/review")
+async def review_cleaner(job_id: str, body: ReviewIn, user=Depends(get_current_user)):
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job or job["poster_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Only the job poster can review")
+    if job.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="You can only review completed jobs")
+    if body.cleaner_id not in job.get("assigned_cleaners", []):
+        raise HTTPException(status_code=400, detail="That cleaner was not assigned to this job")
+    await db.reviews.update_one(
+        {"job_id": job_id, "cleaner_id": body.cleaner_id, "reviewer_id": user["user_id"]},
+        {"$set": {
+            "review_id": f"rev_{uuid.uuid4().hex[:10]}",
+            "job_id": job_id, "job_title": job.get("title"),
+            "cleaner_id": body.cleaner_id, "reviewer_id": user["user_id"],
+            "reviewer_name": user["name"], "rating": body.rating,
+            "comment": body.comment or "", "created_at": now_utc(),
+        }},
+        upsert=True,
+    )
+    # recompute aggregate
+    revs = await db.reviews.find({"cleaner_id": body.cleaner_id}).to_list(1000)
+    count = len(revs)
+    avg = round(sum(r["rating"] for r in revs) / count, 2) if count else 0
+    await db.users.update_one({"user_id": body.cleaner_id}, {"$set": {"avg_rating": avg, "review_count": count}})
+    return {"avg_rating": avg, "review_count": count}
+
+@api_router.get("/users/{cleaner_id}/reviews")
+async def get_reviews(cleaner_id: str, user=Depends(get_current_user)):
+    revs = await db.reviews.find({"cleaner_id": cleaner_id}).sort("created_at", -1).to_list(200)
+    target = await db.users.find_one({"user_id": cleaner_id})
+    return {
+        "avg_rating": round((target or {}).get("avg_rating", 0), 1),
+        "review_count": (target or {}).get("review_count", 0),
+        "reviews": [{"review_id": r["review_id"], "reviewer_name": r["reviewer_name"], "rating": r["rating"],
+                     "comment": r.get("comment", ""), "job_title": r.get("job_title", ""),
+                     "created_at": iso(r["created_at"])} for r in revs],
+    }
+
 @api_router.get("/")
 async def root():
-    return {"message": "Auto Abodes API"}
+    return {"message": "AbodeOps API"}
 
 app.include_router(api_router)
 app.add_middleware(

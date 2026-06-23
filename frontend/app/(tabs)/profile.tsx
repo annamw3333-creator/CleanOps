@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Switch } from "react-native";
 import { useAuth } from "@/src/AuthContext";
 import { api } from "@/src/api";
-import { Screen, Header, Card, Button, Input, Avatar, Chip, colors, spacing, radius } from "@/src/components/UI";
-import { QUALIFICATIONS } from "@/src/theme";
+import { Screen, Header, Card, Button, Input, Avatar, Chip, RatingLabel, colors, spacing, radius } from "@/src/components/UI";
+import { QUALIFICATIONS, SUBSCRIPTION_TIERS } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -18,7 +18,14 @@ export default function Profile() {
   const [autoAccept, setAutoAccept] = useState(!!user?.auto_accept);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [myReviews, setMyReviews] = useState<any>(null);
   const isCleaner = user?.role === "cleaner" || user?.role === "owner_cleaner" || user?.role === "admin";
+
+  useEffect(() => {
+    if (user?.user_id && isCleaner) {
+      api.get(`/users/${user.user_id}/reviews`).then(setMyReviews).catch(() => {});
+    }
+  }, [user?.user_id]);
 
   const toggleQual = (q: string) => setQuals((p) => p.includes(q) ? p.filter((x) => x !== q) : [...p, q]);
 
@@ -111,6 +118,27 @@ export default function Profile() {
           </Card>
         )}
 
+        {isCleaner && myReviews && (
+          <Card style={{ gap: spacing.md }} testID="reviews-card">
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={styles.section}>Reviews</Text>
+              <RatingLabel rating={myReviews.avg_rating || 0} count={myReviews.review_count || 0} size={15} />
+            </View>
+            {(!myReviews.reviews || myReviews.reviews.length === 0) ? (
+              <Text style={styles.hint}>Complete jobs to start earning reviews from clients.</Text>
+            ) : myReviews.reviews.slice(0, 8).map((r: any) => (
+              <View key={r.review_id} style={styles.reviewItem}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={styles.reviewer}>{r.reviewer_name}</Text>
+                  <RatingLabel rating={r.rating} count={1} size={12} />
+                </View>
+                {r.comment ? <Text style={styles.reviewComment}>{r.comment}</Text> : null}
+                {r.job_title ? <Text style={styles.reviewJob}>{r.job_title}</Text> : null}
+              </View>
+            ))}
+          </Card>
+        )}
+
         {saved ? <Text style={styles.saved}>✓ Profile saved</Text> : null}
         <Button title="Save Changes" onPress={save} loading={saving} testID="save-profile-button" />
         <Button title="Log Out" variant="outline" icon="log-out-outline" onPress={logout} testID="logout-button" />
@@ -135,4 +163,8 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   switchLabel: { fontSize: 15, fontWeight: "600", color: colors.onSurface },
   saved: { color: colors.success, fontWeight: "700", textAlign: "center" },
+  reviewItem: { gap: 2, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
+  reviewer: { fontSize: 14, fontWeight: "700", color: colors.onSurface },
+  reviewComment: { fontSize: 13, color: colors.onSurface },
+  reviewJob: { fontSize: 11, color: colors.muted },
 });

@@ -1,0 +1,48 @@
+{
+  "summary": "Round-4 backend testing for AbodeOps Ratings & Reviews. Added /app/backend/tests/test_reviews.py (14 new tests) and re-ran the full backend suite. Results: 71/71 PASSED (100%) — 30 round-1 + 16 round-2 + 11 round-3 billing + 14 round-4 reviews. Verified: (1) POST /api/jobs/{id}/review enforces poster-only (other owner -> 403, missing token -> 401); (2) Only completed jobs accept reviews (400 'completed' when job is still pending); (3) Only assigned cleaners can be reviewed (unassigned cleaner -> 400 'assigned'); (4) Rating range 1-5 enforced by Pydantic Field(ge=1,le=5) → ratings 0, 6, -1, 10 all return 422; (5) Idempotent upsert per (job, cleaner, reviewer): submitting twice from the same poster updates the rating and leaves review_count=1; (6) Aggregate recompute is correct — 3 distinct posters rating same cleaner 3 / 4 / 5 (after the in-place update from step 5) yields avg_rating=4.0 and review_count=3; (7) GET /api/users/{cleaner_id}/reviews returns {avg_rating, review_count, reviews[]} with each entry exposing reviewer_name / rating / comment / job_title / created_at; (8) GET /api/users carries avg_rating and review_count on EVERY user; (9) GET /api/jobs/{id} returns avg_rating & review_count inside both applicants_info[] and assigned_cleaners_info[] (unreviewed cleaner correctly shows 0/0); (10) End-to-end smoke: owner posts no-quals job → cleaner with auto_accept applies (auto_accepted=True, status='assigned') → owner POST /jobs/{id}/status {completed} → owner POSTs review (5★, 'spotless') → GET /users/{cleaner}/reviews reflects rating=5, comment='spotless', job_title carries the TEST_review_job_ prefix. Owner-side /jobs/{id}/status completion path (used by the new flow) bypasses the cleaner checklist as designed. Regression PASSED: all 57 prior tests still green (auth, admin auto-upgrade, subscription up/down, profile, full job lifecycle including cleaner checkin/checklist/complete, chat, /users, geocoding, status, delete, teams, Stripe checkout pro+business + payment_transactions persistence).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_reviews.py",
+    "/app/backend/tests/test_auto_abodes.py",
+    "/app/backend/tests/test_round2_features.py",
+    "/app/backend/tests/test_billing.py",
+    "/app/test_reports/pytest/reviews_results.xml",
+    "/app/test_reports/pytest/full_round4_results.xml"
+  ],
+  "action_items": [
+    "(Carried over from iter_3, still open) /api/billing/status/{session_id} resolves the upgrade target from the CURRENT bearer-token user rather than the user_id stored in payment_transactions / Stripe session.metadata. Anyone holding another user's session_id could call this endpoint with their own token and upgrade their own tier on another user's payment. Recommend resolving target user_id from the txn document or s.metadata.user_id and rejecting (403) if it mismatches the authenticated user.",
+    "(Carried over from iter_3) Wrap stripe.Price lookup_key resolution in an asyncio.Lock or catch Stripe IdempotencyError on first-cold-start race to avoid a 500 on the loser of two concurrent first-time pro checkouts.",
+    "(Carried over from iter_3) server.py is now ~709 lines — over the 700-line guideline. Strongly consider splitting into routers (auth.py, jobs.py, teams.py, billing.py, chat.py, reviews.py) before adding more features.",
+    "(Tracked from iter_2, still open) Add testID='login-submit' on the Sign In submit button to unblock deterministic Playwright UI automation (not in scope for backend-only iteration).",
+    "(Frontend follow-up, NOT BLOCKING backend) Verify /app/frontend/app/job/[id].tsx and /app/frontend/app/(tabs)/profile.tsx actually render the new avg_rating/review_count fields and the /users/{id}/reviews list — backend exposes the data correctly, but UI rendering was not in scope this iteration."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py L657-672 review_cleaner upsert is correct but stores a fresh review_id even on update (the $set inside upsert overwrites review_id every time). Acceptable, but if the frontend ever caches review_id for editing, the id will silently change between submissions. Consider $setOnInsert for review_id and created_at, with $set only for rating/comment/updated_at.",
+    "/app/backend/server.py L671 avg uses round(..., 2) when storing, but L680 GET re-rounds to 1 decimal. Inconsistent precision. The POST response (line 673) returns the 2-decimal value while GET returns 1-decimal — clients may see a flicker (e.g. POST returns 4.33, then GET returns 4.3). Pick one precision and apply consistently.",
+    "/app/backend/server.py L676 GET /users/{cleaner_id}/reviews has no role/poster check — ANY authenticated user (including unrelated cleaners) can pull any cleaner's reviews. That is likely intended (public profile-style endpoint), but worth confirming with product. No PII leakage observed.",
+    "/app/backend/server.py L655 'if body.cleaner_id not in job.get(\"assigned_cleaners\", [])' permits review even if the job was completed but the cleaner was unassigned mid-way then reassigned — minor edge case, but the assigned_cleaners list is the single source of truth so behaviour is acceptable.",
+    "(Carried over from iter_3) /api/billing/status/{session_id} cross-user upgrade risk — see action_items.",
+    "server.py crossed 700 lines (709) — exceeds project-style guideline; split into routers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_reviews.py (created)"
+  ],
+  "success_rate": {
+    "backend": "100% (71/71 — 30 round-1 + 16 round-2 + 11 round-3 + 14 round-4 reviews)",
+    "frontend": "skipped per request (backend-only iteration)"
+  },
+  "seed_data_creation": "Each test run creates TEST_-prefixed users (owners + cleaners) and a handful of TEST_review_job_* jobs. Reviews collection accrues rows under those job/cleaner ids. All data is identifiable by the TEST_ prefix. No production data mutated.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/ -v` to execute all 71 tests. BASE_URL is read from /app/frontend/.env EXPO_PUBLIC_BACKEND_URL by conftest.py. Reviews endpoints: POST /api/jobs/{id}/review (body: cleaner_id, rating 1-5, comment); GET /api/users/{cleaner_id}/reviews. To complete a job for review, prefer the owner-side POST /api/jobs/{id}/status {status:'completed'} — it bypasses the cleaner checklist requirement and is what the new flow uses. Each cleaner doc carries avg_rating and review_count once any review lands; both fields default to 0 when missing. Important behavioural note: the POST response rounds avg to 2 decimals while GET rounds to 1 — flagged for product/dev attention. No frontend rendering was validated in this iteration.",
+  "rca_of_issue": "N/A — no functional bugs surfaced. The single test-setup issue encountered (PUT /api/profile returns {'user': {...}} envelope, not the user payload directly) was a test-harness assumption I corrected in _enable_auto_accept; not a backend defect."
+}
