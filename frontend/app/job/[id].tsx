@@ -1,10 +1,11 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Modal, TextInput } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import * as Calendar from "expo-calendar";
+import * as Location from "expo-location";
 import { Platform } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/src/AuthContext";
@@ -34,6 +35,24 @@ export default function JobDetail() {
   }, [id]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // Share live location while assigned & job is active (en route or on site). Foreground only.
+  useEffect(() => {
+    if (Platform.OS === "web" || !isAssigned) return;
+    if (!job?.tracking || job?.status === "completed") return;
+    let active = true;
+    const send = async () => {
+      try {
+        let perm = await Location.getForegroundPermissionsAsync();
+        if (perm.status !== "granted") return;
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (active) await api.post(`/jobs/${id}/location`, { latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+      } catch {}
+    };
+    send();
+    const t = setInterval(send, 15000);
+    return () => { active = false; clearInterval(t); };
+  }, [isAssigned, job?.tracking, job?.status, id]);
+
   if (!job) return <Screen><Header title="Job" onBack={() => router.back()} /><ActivityIndicator color={colors.brand} style={{ marginTop: 40 }} /></Screen>;
 
   const act = async (fn: () => Promise<any>) => { setBusy(true); try { await fn(); await load(); } catch (e: any) { alert(e.message); } finally { setBusy(false); } };
@@ -46,8 +65,23 @@ export default function JobDetail() {
       setAssignOpen(true);
     } catch {}
   };
-  const checkin = () => act(async () => { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); await api.post(`/jobs/${id}/checkin`); });
+  const checkin = () => act(async () => { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); await api.post(`/jobs/${id}/checkin`); const c = await getCoords(); if (c) { try { await api.post(`/jobs/${id}/location`, c); } catch {} } });
   const complete = () => act(async () => { await api.post(`/jobs/${id}/complete`); await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.back(); });
+  const getCoords = async (): Promise<{ latitude: number; longitude: number } | null> => {
+    if (Platform.OS === "web") return null;
+    try {
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (perm.status !== "granted") { if (!perm.canAskAgain) return null; perm = await Location.requestForegroundPermissionsAsync(); }
+      if (perm.status !== "granted") return null;
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+    } catch { return null; }
+  };
+  const onMyWay = () => act(async () => {
+    const c = await getCoords();
+    await api.post(`/jobs/${id}/enroute`, { latitude: c?.latitude ?? job.latitude, longitude: c?.longitude ?? job.longitude });
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  });
 
   const pickPhoto = async (itemId: string) => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -221,7 +255,24 @@ export default function JobDetail() {
           </>
         )}
         {isAssigned && job.status === "pending" && myResp === "accepted" && (
-          <Button title="Check In & Start Job" icon="play" onPress={checkin} loading={busy} testID="checkin-button" />
+          <>
+            {!job.enroute_at && (
+              <Button title="On My Way" icon="navigate" variant="outline" onPress={onMyWay} loading={busy} testID="onmyway-button" />
+            )}
+            {job.enroute_at && (
+              <View style={styles.tracking} testID="tracking-indicator">
+                <Ionicons name="navigate-circle" size={16} color={colors.brand} />
+                <Text style={styles.trackingText}>Sharing live location with the job poster</Text>
+              </View>
+            )}
+            <Button title="Check In & Start Job" icon="play" onPress={checkin} loading={busy} testID="checkin-button" />
+          </>
+        )}
+        {isAssigned && job.status === "in_progress" && (
+          <View style={styles.tracking} testID="tracking-indicator-onsite">
+            <Ionicons name="location" size={16} color={colors.gold} />
+            <Text style={styles.trackingText}>On site · live location visible to the poster</Text>
+          </View>
         )}
         {isAssigned && job.status === "in_progress" && (
           <Button title="Complete Job" icon="checkmark-circle" variant="secondary" onPress={complete} loading={busy} disabled={!allDone} testID="complete-button" />
@@ -359,6 +410,8 @@ const styles = StyleSheet.create({
   actionBar: { position: "absolute", bottom: 0, left: 0, right: 0, padding: spacing.lg, paddingBottom: spacing.xl, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.xs },
   completed: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   completedText: { fontSize: 14, fontWeight: "700", color: colors.success },
+  tracking: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.sage + "55", paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.md },
+  trackingText: { fontSize: 12.5, fontWeight: "700", color: colors.onSurface },
   modalBg: { flex: 1, backgroundColor: "#0008", justifyContent: "flex-end" },
   reviewModal: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, paddingBottom: spacing["2xl"], maxHeight: "85%" },
   reviewHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg },

@@ -7,6 +7,7 @@ import * as Haptics from "expo-haptics";
 import { useAuth } from "@/src/AuthContext";
 import { api } from "@/src/api";
 import { Screen, Header, Card, EmptyState, colors, spacing, radius } from "@/src/components/UI";
+import JobMap from "@/src/components/JobMap";
 
 const POLL_MS = 6000;
 
@@ -132,6 +133,23 @@ export default function Driver() {
           </Card>
         )}
 
+        {/* Mini-map of work around me */}
+        {online && offers.length > 0 && (
+          <View style={styles.mapWrap}>
+            <JobMap
+              jobs={offers.filter((o) => o.latitude && o.longitude)}
+              people={[]}
+              meLocation={coords ? { latitude: coords.lat, longitude: coords.lng } : null}
+              region={{
+                latitude: coords?.lat ?? offers[0]?.latitude ?? 51.0447,
+                longitude: coords?.lng ?? offers[0]?.longitude ?? -114.0719,
+                latitudeDelta: 0.08, longitudeDelta: 0.08,
+              }}
+              onSelect={(j: any) => { if (j?.job_id) router.push(`/job/${j.job_id}`); }}
+            />
+          </View>
+        )}
+
         {/* Earnings */}
         <View style={styles.earnRow}>
           <EarnCard label="Today" value={earnings.today} highlight />
@@ -213,6 +231,7 @@ function Meta({ icon, text }: { icon: any; text: string }) {
 
 const styles = StyleSheet.create({
   toggleCard: { flexDirection: "row", alignItems: "center", borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md },
+  mapWrap: { height: 200, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
   toggleTitle: { fontSize: 22, fontWeight: "800", color: "#fff" },
   toggleSub: { fontSize: 13, color: "#ffffffcc", marginTop: 2 },
   settingsBtn: { backgroundColor: colors.warning, paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.md },

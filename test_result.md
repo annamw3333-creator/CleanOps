@@ -150,8 +150,31 @@ backend:
         -agent: "main"
         -comment: "Curl-verified: offers sorted by haversine distance, earnings today/week/total, grab is atomic (409 on double-grab), decline hides offer. /driver/status sets online + location."
 
+  - task: "Live location tracking + Live Crew Map (privacy-scoped to poster)"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Curl-verified: POST /jobs/{id}/enroute (sets tracking + shares location), POST /jobs/{id}/location (ping), GET /fleet/live (poster/admin only - 403 for cleaner). Privacy: cleaner_locations stripped from enrich_job so regular /jobs/{id} does NOT leak location; only GET /fleet/live exposes live_cleaners to the poster. Stale (>60min) and completed-phase locations filtered. NOTE: path is /api/fleet/live (NOT /jobs/live which collided with /jobs/{job_id})."
+
 frontend:
-  - task: "Client List screen + dashboard card"
+  - task: "Driver Mode mini-map + Live Crew Map screen + On My Way lifecycle"
+    implemented: true
+    working: "NA"
+    file: "app/driver.tsx, app/live-map.tsx, app/job/[id].tsx, src/components/JobMap.tsx, src/components/JobMap.web.tsx, app/(tabs)/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Smoke-tested on web: Live Crew Map renders (owner dashboard live-map-card -> shows '1 live' + cleaner 'On the way' + pending job pins + legend). Driver screen shows mini-map above offers when online. Job detail: assigned cleaner with accepted job sees 'On My Way' (onmyway-button) -> enroute + live location sharing indicator; in_progress shows on-site tracking indicator. Foreground location ping every 15s while tracking (mobile only). JobMap now renders person pins (live cleaners) + me-location."
+
     implemented: true
     working: "NA"
     file: "app/clients.tsx, app/(tabs)/index.tsx"

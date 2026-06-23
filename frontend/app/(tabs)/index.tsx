@@ -106,6 +106,20 @@ export default function Dashboard() {
           <Ionicons name="chevron-forward" size={20} color={colors.muted} />
         </Card>
 
+        {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
+          <Card onPress={() => router.push("/live-map")} testID="live-map-card"
+            style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.brand, borderColor: colors.brand }}>
+            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#ffffff22", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="location-outline" size={22} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#fff" }}>Live Crew Map</Text>
+              <Text style={{ fontSize: 12.5, color: "#ffffffcc" }}>Track cleaners' live locations on active jobs</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#ffffffcc" />
+          </Card>
+        )}
+
         <Card onPress={() => router.push("/clients")} testID="clients-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
           <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="people-outline" size={20} color={colors.brand} />

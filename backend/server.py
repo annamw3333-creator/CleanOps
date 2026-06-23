@@ -430,6 +430,7 @@ async def payroll_calculate(body: PayrollIn, user=Depends(get_current_user)):
 # ---------------- Jobs ----------------
 async def enrich_job(job: dict):
     job = clean(dict(job))
+    job.pop("cleaner_locations", None)  # live locations are private; exposed only via /jobs/live to the poster
     assigned = []
     for cid in job.get("assigned_cleaners", []):
         c = await db.users.find_one({"user_id": cid})
@@ -639,7 +640,9 @@ async def complete_job(job_id: str, user=Depends(get_current_user)):
             hours = round((now_utc() - checked_in).total_seconds() / 3600, 2) or job.get("estimated_duration", 0)
     pay = round(hours * job.get("pay_rate", 0), 2)
     await db.jobs.update_one({"job_id": job_id}, {
-        "$set": {"status": "completed", "completed_at": now_utc(), "logged_hours": hours, "logged_pay": pay}})
+        "$set": {"status": "completed", "completed_at": now_utc(), "logged_hours": hours, "logged_pay": pay,
+                 "tracking": False, f"cleaner_locations.{user['user_id']}.phase": "completed",
+                 f"cleaner_locations.{user['user_id']}.at": now_utc()}})
     # log to hours collection
     await db.hours_log.insert_one({
         "log_id": f"log_{uuid.uuid4().hex[:10]}", "cleaner_id": user["user_id"], "job_id": job_id,
@@ -1110,6 +1113,67 @@ async def grab_job(job_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=409, detail="This job was just taken by another cleaner")
     updated = await db.jobs.find_one({"job_id": job_id})
     return await enrich_job(updated)
+
+# ---------------- Live location tracking (private to job poster) ----------------
+class LocationIn(BaseModel):
+    latitude: float
+    longitude: float
+
+async def _set_job_location(job_id: str, user: dict, phase: str, lat=None, lng=None):
+    upd = {
+        f"cleaner_locations.{user['user_id']}.phase": phase,
+        f"cleaner_locations.{user['user_id']}.at": now_utc(),
+        f"cleaner_locations.{user['user_id']}.name": user["name"],
+    }
+    if lat is not None:
+        upd[f"cleaner_locations.{user['user_id']}.lat"] = lat
+    if lng is not None:
+        upd[f"cleaner_locations.{user['user_id']}.lng"] = lng
+    await db.jobs.update_one({"job_id": job_id}, {"$set": upd})
+
+@api_router.post("/jobs/{job_id}/enroute")
+async def enroute_job(job_id: str, body: LocationIn, user=Depends(get_current_user)):
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job or user["user_id"] not in job.get("assigned_cleaners", []):
+        raise HTTPException(status_code=403, detail="Not assigned to this job")
+    await db.jobs.update_one({"job_id": job_id}, {"$set": {"enroute_at": now_utc(), "tracking": True}})
+    await _set_job_location(job_id, user, "enroute", body.latitude, body.longitude)
+    return await enrich_job(await db.jobs.find_one({"job_id": job_id}))
+
+@api_router.post("/jobs/{job_id}/location")
+async def ping_job_location(job_id: str, body: LocationIn, user=Depends(get_current_user)):
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job or user["user_id"] not in job.get("assigned_cleaners", []):
+        raise HTTPException(status_code=403, detail="Not assigned to this job")
+    existing = (job.get("cleaner_locations", {}) or {}).get(user["user_id"], {}) or {}
+    phase = "on_site" if job.get("status") == "in_progress" else (existing.get("phase") or "enroute")
+    await _set_job_location(job_id, user, phase, body.latitude, body.longitude)
+    return {"ok": True}
+
+@api_router.get("/fleet/live")
+async def live_jobs(user=Depends(get_current_user)):
+    if user["role"] not in ("company_owner", "owner_cleaner", "client", "admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    q = {} if user["role"] == "admin" else {"poster_id": user["user_id"]}
+    q["status"] = {"$in": ["pending", "in_progress"]}
+    jobs = await db.jobs.find(q).sort("created_at", -1).to_list(300)
+    cutoff = now_utc() - timedelta(minutes=60)
+    out = []
+    for j in jobs:
+        live = []
+        for uid, loc in (j.get("cleaner_locations", {}) or {}).items():
+            if loc.get("phase") == "completed" or loc.get("lat") is None or loc.get("lng") is None:
+                continue
+            at = _aware(loc.get("at"))
+            if isinstance(at, datetime) and at < cutoff:
+                continue
+            live.append({"user_id": uid, "name": loc.get("name", "Cleaner"),
+                         "latitude": loc.get("lat"), "longitude": loc.get("lng"),
+                         "phase": loc.get("phase", "enroute"), "updated_at": iso(at)})
+        ej = await enrich_job(j)
+        ej["live_cleaners"] = live
+        out.append(ej)
+    return out
 
 app.include_router(api_router)
 app.add_middleware(
