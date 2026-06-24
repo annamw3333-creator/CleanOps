@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/src/AuthContext";
 import { api } from "@/src/api";
 import { Screen, Header, Chip, EmptyState, Card, Button, colors, spacing } from "@/src/components/UI";
@@ -54,10 +55,21 @@ export default function Jobs() {
         ) : tab === "available" ? jobs.map((j) => (
           <View key={j.job_id} style={{ gap: spacing.sm }}>
             <JobRow job={j} onPress={() => router.push(`/job/${j.job_id}`)} />
-            <View style={{ flexDirection: "row", gap: spacing.sm }}>
-              <Button title="Add to Schedule" icon="calendar" onPress={() => addToSchedule(j.job_id)} style={{ flex: 1, height: 46 }} testID={`add-schedule-${j.job_id}`} />
-              <Button title="Details" variant="outline" onPress={() => router.push(`/job/${j.job_id}`)} style={{ flex: 1, height: 46 }} testID={`details-${j.job_id}`} />
-            </View>
+            {j.fits_availability === false ? (
+              <View style={styles.outsideRow} testID={`outside-${j.job_id}`}>
+                <View style={styles.outsideBadge}>
+                  <Ionicons name="time-outline" size={13} color={colors.warning} />
+                  <Text style={styles.outsideText}>Outside your hours</Text>
+                </View>
+                <Button title="Adjust availability" variant="outline" icon="calendar-clear-outline"
+                  onPress={() => router.push("/availability")} style={{ flex: 1, height: 46 }} testID={`adjust-${j.job_id}`} />
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                <Button title="Add to Schedule" icon="calendar" onPress={() => addToSchedule(j.job_id)} style={{ flex: 1, height: 46 }} testID={`add-schedule-${j.job_id}`} />
+                <Button title="Details" variant="outline" onPress={() => router.push(`/job/${j.job_id}`)} style={{ flex: 1, height: 46 }} testID={`details-${j.job_id}`} />
+              </View>
+            )}
           </View>
         )) : jobs.map((j) => <JobRow key={j.job_id} job={j} onPress={() => router.push(`/job/${j.job_id}`)} />)}
       </ScrollView>
@@ -65,4 +77,8 @@ export default function Jobs() {
   );
 }
 
-const styles = StyleSheet.create({});
+const styles = StyleSheet.create({
+  outsideRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  outsideBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.warning + "1A", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.warning + "55" },
+  outsideText: { fontSize: 12, fontWeight: "700", color: colors.warning },
+});

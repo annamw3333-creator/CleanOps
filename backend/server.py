@@ -553,7 +553,12 @@ async def list_jobs(scope: str = "available", status: Optional[str] = None, user
             mine = set(user.get("qualifications", []))
             if not req.issubset(mine):
                 continue
-        result.append(await enrich_job(j))
+        ej = await enrich_job(j)
+        if user["role"] in ("cleaner", "owner_cleaner"):
+            ok, reason = availability_fit(user, j)
+            ej["fits_availability"] = ok
+            ej["fit_reason"] = reason
+        result.append(ej)
     return result
 
 @api_router.get("/jobs/{job_id}")
@@ -575,6 +580,10 @@ async def get_job(job_id: str, user=Depends(get_current_user)):
                          "match_score": match_score(c, job, cc)})
     apps.sort(key=lambda a: a["match_score"], reverse=True)
     enriched["applicants_info"] = apps
+    if user["role"] in ("cleaner", "owner_cleaner"):
+        ok, reason = availability_fit(user, job)
+        enriched["fits_availability"] = ok
+        enriched["fit_reason"] = reason
     return enriched
 
 @api_router.post("/jobs/{job_id}/apply")
