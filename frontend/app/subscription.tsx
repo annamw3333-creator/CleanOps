@@ -80,6 +80,27 @@ export default function Subscription() {
           <Text style={styles.heroSub}>Live GPS crew tracking, teams, onboarding, payroll previews and messaging — all in one place.</Text>
           <View style={styles.betaBanner}><Ionicons name="rocket" size={13} color={colors.gold} /><Text style={styles.betaBannerText}>{BETA_NOTE}</Text></View>
         </View>
+
+        <View style={styles.whyCard}>
+          <Text style={styles.whyTitle}>Why CleanOps?</Text>
+          {[
+            "All features included — no per-seat fees",
+            "Unlimited cleaners on every plan",
+            "Live GPS crew map & instant Driver Mode",
+            "Built-in payroll, tax previews & reconciliation",
+          ].map((b) => (
+            <View key={b} style={styles.whyRow}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.sageDeep} />
+              <Text style={styles.whyText}>{b}</Text>
+            </View>
+          ))}
+          <View style={styles.compareBox}>
+            <Text style={styles.compareText}>Comparable tools charge far more:</Text>
+            <Text style={styles.compareRow}>Jobber <Text style={styles.compareStrike}>$349–$599/mo</Text> + $29/seat</Text>
+            <Text style={styles.compareRow}>Automaid <Text style={styles.compareStrike}>~$299/mo</Text></Text>
+            <Text style={styles.compareRow}>ZenMaid <Text style={styles.compareStrike}>$49/mo</Text> + $24/seat</Text>
+          </View>
+        </View>
         {isAdmin && (
           <View style={styles.adminCard}>
             <Ionicons name="shield-checkmark" size={22} color={colors.gold} />
@@ -144,6 +165,14 @@ const styles = StyleSheet.create({
   betaBannerText: { flex: 1, fontSize: 11.5, color: colors.gold, fontWeight: "600", lineHeight: 16 },
   betaChip: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 6, backgroundColor: colors.surfaceTertiary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },
   betaChipText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.4 },
+  whyCard: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, gap: spacing.sm },
+  whyTitle: { fontSize: 16, fontWeight: "800", color: colors.onSurface },
+  whyRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  whyText: { fontSize: 13.5, color: colors.onSurface, fontWeight: "600", flex: 1 },
+  compareBox: { backgroundColor: colors.surfaceTertiary, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.xs, gap: 3 },
+  compareText: { fontSize: 12, color: colors.muted, fontWeight: "700", marginBottom: 2 },
+  compareRow: { fontSize: 13, color: colors.onSurface, fontWeight: "600" },
+  compareStrike: { color: colors.muted, textDecorationLine: "line-through" },
   origPrice: { fontSize: 12, color: colors.muted, textDecorationLine: "line-through", fontWeight: "700" },
   ribbon: { position: "absolute", top: -1, right: 16, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderBottomLeftRadius: radius.sm, borderBottomRightRadius: radius.sm },
   ribbonText: { fontSize: 10.5, fontWeight: "900", color: colors.onGold, letterSpacing: 0.5 },

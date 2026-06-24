@@ -33,7 +33,21 @@ Marketplace for cleaning companies, homeowners & landlords to find qualified cle
 - P2: Owner live map of all assigned jobs as dedicated admin view; ratings/reviews (Homestars-style); push notifications (on request); chat realtime via websockets; modularize server.py; login rate-limiting.
 
 ## Next Tasks
-## Implemented (2026-06-23, fork session)
+## Implemented (2026-06-24, fork session)
+- Renamed app **AbodeOps → CleanOps** (auth, feedback, subscription, app.json name/description, Stripe product name, API root). Internal Stripe lookup keys + demo emails left unchanged.
+- Schedule-aware matching: jobs only match if start window fits cleaner's available hours (apply/grab/assign/offers); "Outside your hours" badge + "Adjust availability" shortcut on jobs list.
+- Structured availability editor (/availability): per-day All-day or multiple time windows.
+- Payment reconciliation (/reconcile): per-cleaner payroll owed/paid + Mark Paid; per-job revenue. Tappable Command Center metrics.
+- BETA pricing: Premium $19/mo; **Business $19.99 first month then $99/mo** (TIER_PRICING pro=1900, business=1999). "Why CleanOps" comparison blurb vs Jobber/Automaid/ZenMaid on subscription page.
+- Expo Go graceful map fallback (list view) via isExpoGo; app.json name/desc/teal splash+adaptive backgrounds.
+- Custom AI-generated app icon (teal location-pin + water droplet + gold sparkle, 1024x1024) wired into icon/adaptive/favicon/splash.
+
+## Pre-deploy notes
+- Stripe in TEST mode (sk_test_) — switch to live keys for real charges.
+- Backend must be deployed (Deploy button) and EXPO_PUBLIC_BACKEND_URL pointed at the stable URL before building the Android app.
+- Emergent universal LLM key budget is low (icon regen hit budget limit) — top up if more AI features are added.
+
+## Earlier implemented
 - Client List (`/clients` + dashboard card): aggregates jobs into clients/companies with tenure, frequency (Weekly/Bi-weekly/Monthly/etc.), clean type, assigned cleaners; editable contact + notes (`client_profiles` collection). APIs: GET /api/clients, PUT /api/clients/notes.
 - Cleaner Dashboard availability toggle: weekday chips update profile.availability inline.
 - Uber-style Driver Mode (`/driver` + dashboard card): Go Online/Offline (expo-location), polled nearby offers (haversine distance, 75km radius, limit 25), one-tap Accept (atomic POST /jobs/{id}/grab; 409 if taken), Decline (POST /driver/decline/{id} hides offer), earnings-forward (today/week/total). APIs: /driver/status, /driver/earnings, /driver/offers.
