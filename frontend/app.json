@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "AbodeOps",
+    "name": "CleanOps",
     "slug": "frontend",
     "version": "1.0.0",
-    "description": "AbodeOps — the operations hub for cleaning companies, cleaners, homeowners and landlords. Live job map, driver mode, teams, payroll and more.",
+    "description": "CleanOps — the operations hub for cleaning companies, cleaners, homeowners and landlords. Live job map, driver mode, teams, payroll and more.",
     "primaryColor": "#1A5F7A",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

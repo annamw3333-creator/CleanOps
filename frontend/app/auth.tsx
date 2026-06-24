@@ -53,7 +53,7 @@ export default function Auth() {
         <LinearGradient colors={["#0A192Fcc", "#0A192F"]} style={StyleSheet.absoluteFill} />
         <View style={styles.heroContent}>
           <View style={styles.logo}><Ionicons name="sparkles" size={26} color={colors.gold} /></View>
-          <Text style={styles.brand}>AbodeOps</Text>
+          <Text style={styles.brand}>CleanOps</Text>
           <Text style={styles.tagline}>The smarter cleaning marketplace</Text>
         </View>
       </View>

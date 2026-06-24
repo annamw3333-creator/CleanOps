@@ -45,7 +45,7 @@ async def get_price_id(tier: str) -> str:
     if existing.data:
         _price_cache[tier] = existing.data[0].id
         return existing.data[0].id
-    product = stripe.Product.create(name=f"AbodeOps {tier.capitalize()}")
+    product = stripe.Product.create(name=f"CleanOps {tier.capitalize()}")
     price = stripe.Price.create(
         product=product.id, unit_amount=amount, currency="usd",
         recurring={"interval": "month"}, lookup_key=lookup,
@@ -865,7 +865,7 @@ async def get_reviews(cleaner_id: str, user=Depends(get_current_user)):
 
 @api_router.get("/")
 async def root():
-    return {"message": "AbodeOps API"}
+    return {"message": "CleanOps API"}
 
 # ---------------- Onboarding & Quizzes ----------------
 class QuizQuestion(BaseModel):

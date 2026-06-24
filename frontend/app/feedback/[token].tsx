@@ -31,7 +31,7 @@ export default function PublicFeedback() {
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingTop: spacing["2xl"] }}>
         <View style={{ alignItems: "center", gap: 6 }}>
           <View style={styles.logo}><Ionicons name="sparkles" size={24} color={colors.gold} /></View>
-          <Text style={styles.brand}>AbodeOps</Text>
+          <Text style={styles.brand}>CleanOps</Text>
           <Text style={styles.sub}>Rate your cleaning service</Text>
         </View>
 

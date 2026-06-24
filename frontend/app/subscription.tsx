@@ -75,7 +75,7 @@ export default function Subscription() {
       <Header title="Subscription" subtitle="Choose the plan that fits you" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing["3xl"], gap: spacing.lg }}>
         <View style={styles.hero}>
-          <View style={styles.heroBadge}><Ionicons name="sparkles" size={14} color={colors.gold} /><Text style={styles.heroBadgeText}>AbodeOps Business</Text></View>
+          <View style={styles.heroBadge}><Ionicons name="sparkles" size={14} color={colors.gold} /><Text style={styles.heroBadgeText}>CleanOps Business</Text></View>
           <Text style={styles.heroTitle}>Run your entire cleaning operation</Text>
           <Text style={styles.heroSub}>Live GPS crew tracking, teams, onboarding, payroll previews and messaging — all in one place.</Text>
           <View style={styles.betaBanner}><Ionicons name="rocket" size={13} color={colors.gold} /><Text style={styles.betaBannerText}>{BETA_NOTE}</Text></View>
