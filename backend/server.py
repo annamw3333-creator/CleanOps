@@ -77,6 +77,32 @@ def job_weekday(date_str: str):
     except Exception:
         return None
 
+def availability_fit(user: dict, job: dict):
+    """Returns (ok, reason). True if the cleaner is available for the job's day AND its start window
+    fits within one of their available time windows (or they're available all day)."""
+    wd = job_weekday(job.get("date", ""))
+    if not wd:
+        return True, ""
+    sched = user.get("availability_schedule") or {}
+    avail = user.get("availability", [])
+    if not sched:
+        # legacy day-only availability
+        if avail and wd not in avail:
+            return False, f"not available on {wd}"
+        return True, ""
+    day = sched.get(wd)
+    if not day:
+        return False, f"not available on {wd}"
+    if day.get("mode") == "all":
+        return True, ""
+    jf, jt = job.get("start_window_from"), job.get("start_window_to")
+    if not jf or not jt:
+        return True, ""
+    for w in day.get("windows", []):
+        if w.get("from", "") <= jf and w.get("to", "") >= jt:
+            return True, ""
+    return False, f"the {jf}\u2013{jt} start window is outside your {wd} hours"
+
 async def completed_count(cid: str) -> int:
     return await db.jobs.count_documents({"assigned_cleaners": cid, "status": "completed"})
 
@@ -560,9 +586,9 @@ async def apply_job(job_id: str, user=Depends(get_current_user)):
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    wd = job_weekday(job.get("date", ""))
-    if wd and wd not in user.get("availability", []):
-        raise HTTPException(status_code=400, detail=f"You are not available on {wd}. Update your availability to take this job.")
+    ok, reason = availability_fit(user, job)
+    if not ok:
+        raise HTTPException(status_code=400, detail=f"You're {reason}. Update your availability to take this job.")
     req = set(job.get("required_qualifications", []))
     mine = set(user.get("qualifications", []))
     if not req.issubset(mine):
@@ -583,9 +609,9 @@ async def assign_job(job_id: str, body: TeamMemberIn, user=Depends(get_current_u
     if not job or (job["poster_id"] != user["user_id"] and user["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Not authorized")
     cleaner = await db.users.find_one({"user_id": body.cleaner_id})
-    wd = job_weekday(job.get("date", ""))
-    if cleaner and wd and wd not in cleaner.get("availability", []):
-        raise HTTPException(status_code=400, detail=f"{cleaner['name']} is not available on {wd}")
+    ok, reason = availability_fit(cleaner, job) if cleaner else (True, "")
+    if not ok:
+        raise HTTPException(status_code=400, detail=f"{cleaner['name']} is {reason}")
     await db.jobs.update_one({"job_id": job_id}, {
         "$addToSet": {"assigned_cleaners": body.cleaner_id},
         "$pull": {"applicants": body.cleaner_id},
@@ -1101,7 +1127,6 @@ async def driver_offers(lat: Optional[float] = None, lng: Optional[float] = None
     clng = lng if lng is not None else user.get("last_lng")
     jobs = await db.jobs.find({"status": "pending", "assigned_cleaners": {"$size": 0}}).sort("created_at", -1).to_list(300)
     mine_quals = set(user.get("qualifications", []))
-    avail = user.get("availability", [])
     offers = []
     for j in jobs:
         if user["user_id"] in j.get("declined_by", []):
@@ -1109,8 +1134,7 @@ async def driver_offers(lat: Optional[float] = None, lng: Optional[float] = None
         req = set(j.get("required_qualifications", []))
         if not req.issubset(mine_quals):
             continue
-        wd = job_weekday(j.get("date", ""))
-        if wd and avail and wd not in avail:
+        if not availability_fit(user, j)[0]:
             continue
         dist = None
         if clat is not None and clng is not None and j.get("latitude") and j.get("longitude"):
@@ -1147,9 +1171,9 @@ async def grab_job(job_id: str, user=Depends(get_current_user)):
     req = set(job.get("required_qualifications", []))
     if not req.issubset(set(user.get("qualifications", []))):
         raise HTTPException(status_code=403, detail="You don't meet the required qualifications")
-    wd = job_weekday(job.get("date", ""))
-    if wd and user.get("availability") and wd not in user.get("availability", []):
-        raise HTTPException(status_code=400, detail=f"You are not available on {wd}")
+    ok, reason = availability_fit(user, job)
+    if not ok:
+        raise HTTPException(status_code=400, detail=f"You're {reason}")
     res = await db.jobs.update_one(
         {"job_id": job_id, "assigned_cleaners": {"$size": 0}},
         {"$addToSet": {"assigned_cleaners": user["user_id"]}, "$pull": {"applicants": user["user_id"]},
