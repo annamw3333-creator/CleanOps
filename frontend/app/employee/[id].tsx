@@ -15,6 +15,13 @@ const WORKER = [
   { k: "employee", l: "Employee" }, { k: "freelancer", l: "Freelancer" }, { k: "subcontractor", l: "Subcontractor" },
 ];
 
+function fmt12(t: string) {
+  const [h, m] = (t || "0:0").split(":").map(Number);
+  const ap = h < 12 ? "AM" : "PM";
+  const hh = h % 12 === 0 ? 12 : h % 12;
+  return `${hh}:${String(m).padStart(2, "0")} ${ap}`;
+}
+
 export default function EmployeeProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
@@ -81,8 +88,20 @@ export default function EmployeeProfile() {
 
         {emp.availability?.length > 0 && (
           <Card><Text style={styles.section}>Availability</Text>
-            <View style={styles.wrap}>{emp.availability.map((d: string) => (
-              <View key={d} style={styles.dayPill}><Text style={styles.dayText}>{d}</Text></View>))}</View>
+            <View style={{ gap: 8, marginTop: 4 }}>
+              {emp.availability.map((d: string) => {
+                const s = emp.availability_schedule?.[d];
+                const detail = !s || s.mode === "all"
+                  ? "All day"
+                  : (s.windows || []).map((w: any) => `${fmt12(w.from)}–${fmt12(w.to)}`).join(", ");
+                return (
+                  <View key={d} style={styles.availRow}>
+                    <View style={styles.dayPill}><Text style={styles.dayText}>{d}</Text></View>
+                    <Text style={styles.availDetail}>{detail}</Text>
+                  </View>
+                );
+              })}
+            </View>
           </Card>
         )}
 
@@ -178,6 +197,8 @@ const styles = StyleSheet.create({
   wrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   dayPill: { backgroundColor: colors.sage, paddingVertical: 4, paddingHorizontal: 12, borderRadius: radius.pill },
   dayText: { fontSize: 12, fontWeight: "700", color: colors.onSurface },
+  availRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  availDetail: { fontSize: 13, color: colors.onSurface, fontWeight: "600", flex: 1 },
   photo: { width: 90, height: 90, borderRadius: 10 },
   stub: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, gap: 6 },
   stubTitle: { fontSize: 13, fontWeight: "700", color: colors.brand, marginBottom: 4 },

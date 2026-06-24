@@ -1,0 +1,35 @@
+{
+  "summary": "Tested the NEW structured availability_schedule feature end-to-end (backend + frontend). 7/7 backend tests pass: PUT /api/profile with availability_schedule persists; user.availability is derived from the schedule keys; GET /api/users/{id} returns availability_schedule; removing a day blocks /apply, /grab, and /assign for that weekday; Profile save (without availability fields) does NOT wipe the schedule. Frontend Playwright flow on mobile viewport (390x844): login as cleaner -> dashboard 'availability-card' shows pills ('Mon \u00b7 all day', 'Thu \u00b7 2 windows', 'Sat \u00b7 1 window', etc.) -> tap card opens /availability editor with all 7 day-<Day> cards, switch-<Day>, all-<Day>/custom-<Day>, from-<Day>-<idx>/to-<Day>-<idx>, time-<HH:MM> picker, add-<Day>, remove-<Day>-<idx>, save-availability. Save returns to dashboard and pills update. Profile screen edit-availability button shows the day list summary. Public /employee/<id> page shows 'Availability' card with 'All day' or formatted time ranges (e.g. 'Thu  6:00 AM\u201311:00 AM, 1:00 PM\u20136:00 PM'). No deprecated Expo packages or SafeAreaView issues detected in the new availability.tsx code. NOTE: login submit button uses testID 'auth-submit-button' (not 'login-button' as the request suggested).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_availability_schedule.py",
+    "/app/test_reports/pytest/availability_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "availability.tsx save(): on failure the catch block silently swallows the error (no toast/alert) and still navigates back via finally? No \u2014 router.back() is in try only, but the user has no feedback if the PUT failed. Consider surfacing an error.",
+    "availability.tsx: when toggling a day OFF (deleting from sched) any custom windows are lost; when toggling ON again the user sees 'All day' default. Acceptable UX but worth noting.",
+    "Schedule validation is only client-side (filters w.from < w.to before save). Backend /profile accepts any Dict[str, Any] for availability_schedule \u2014 no shape validation, no time-format check, no overlap check. Low risk since the UI controls the input, but a malformed schedule (e.g. via curl) would persist."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_availability_schedule.py"
+  ],
+  "success_rate": {
+    "backend": "100% (7/7)",
+    "frontend": "100% (all testIDs reachable, save persists, all displays render correctly)"
+  },
+  "seed_data_creation": "No new seed data created. Test re-asserts the seeded schedule (Mon/Tue/Wed/Fri/Sun all-day, Thu 2 windows 06:00-11:00 & 13:00-18:00, Sat 1 window 08:00-14:00) at the end via TestRestoreSeed so subsequent tests / manual QA see a clean state.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend test file: /app/backend/tests/test_availability_schedule.py covers all availability_schedule paths (PUT, GET /users/{id}, derived availability, apply/grab/assign day-matching, profile-save-doesn't-wipe). Frontend testIDs verified: availability-card (dashboard), edit-availability (profile), day-Mon..day-Sun, switch-<Day>, all-<Day>, custom-<Day>, from-<Day>-<idx>, to-<Day>-<idx>, add-<Day>, remove-<Day>-<idx>, time-<HH:MM>, save-availability. Login submit testID is 'auth-submit-button'. Cleaner user_id: user_52caf676c159.",
+  "rca_of_issue": "N/A \u2014 no bugs found. Feature works as designed."
+}

@@ -34,6 +34,12 @@ async def main():
         hourly_rate=30, auto_accept=False,
         experience_summary="5 years of residential & Airbnb turnover cleaning across Calgary.",
         portfolio=[PNG] * 12, availability=DAYS[:],
+        availability_schedule={
+            "Mon": {"mode": "all"}, "Tue": {"mode": "all"}, "Wed": {"mode": "all"},
+            "Thu": {"mode": "windows", "windows": [{"from": "06:00", "to": "11:00"}, {"from": "13:00", "to": "18:00"}]},
+            "Fri": {"mode": "all"}, "Sat": {"mode": "windows", "windows": [{"from": "08:00", "to": "14:00"}]},
+            "Sun": {"mode": "all"},
+        },
     )
 
     # Clear previous demo jobs

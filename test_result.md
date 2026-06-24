@@ -162,7 +162,31 @@ backend:
         -agent: "main"
         -comment: "Curl-verified: POST /jobs/{id}/enroute (sets tracking + shares location), POST /jobs/{id}/location (ping), GET /fleet/live (poster/admin only - 403 for cleaner). Privacy: cleaner_locations stripped from enrich_job so regular /jobs/{id} does NOT leak location; only GET /fleet/live exposes live_cleaners to the poster. Stale (>60min) and completed-phase locations filtered. NOTE: path is /api/fleet/live (NOT /jobs/live which collided with /jobs/{job_id})."
 
-  - task: "Payment reconciliation (reconcile + mark-paid) & beta pricing"
+  - task: "Structured availability (all-day / multiple time windows per day)"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Curl-verified: PUT /profile accepts availability_schedule {day:{mode:'all'} | {mode:'windows',windows:[{from,to}]}}; backend derives day-level 'availability' list from schedule keys so all existing job-matching (apply/grab/offers/match_score) stays intact. get_public_user now returns availability_schedule. Saved Mon=all, Tue=2 windows successfully; availability=['Mon','Tue']."
+
+frontend:
+  - task: "Availability editor screen (days + all-day/custom windows) + profile/dashboard/employee display"
+    implemented: true
+    working: "NA"
+    file: "app/availability.tsx, app/(tabs)/index.tsx, app/(tabs)/profile.tsx, app/employee/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New /availability screen: per-day switch -> 'All day' vs 'Custom hours' segment -> multiple time windows (from/to via 30-min time picker modal) with add/remove. Renders (7 day rows, save button confirmed). Dashboard 'My Availability' card and Profile 'Availability' now open this editor (old day-chip toggles removed; profile no longer sends availability in its save). Employee public profile shows per-day windows. Needs e2e validation logged in as cleaner@abodeops.com: toggle a day on, pick custom hours, add a 2nd window, save, confirm persistence + day still matches jobs."
+
     implemented: true
     working: true
     file: "server.py"

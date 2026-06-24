@@ -6,17 +6,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useAuth } from "@/src/AuthContext";
 import { api } from "@/src/api";
-import { Screen, Header, Card, Button, StatusPill, EmptyState, Avatar, AdBanner, Chip, colors, spacing, radius } from "@/src/components/UI";
+import { Screen, Header, Card, Button, StatusPill, EmptyState, Avatar, AdBanner, colors, spacing, radius } from "@/src/components/UI";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function Dashboard() {
-  const { user, refresh } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState<any>(null);
   const [jobs, setJobs] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [savingAvail, setSavingAvail] = useState(false);
   const isCleaner = user?.role === "cleaner";
 
   const load = useCallback(async () => {
@@ -31,13 +30,6 @@ export default function Dashboard() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
-
-  const toggleDay = async (day: string) => {
-    const current: string[] = user?.availability || [];
-    const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
-    setSavingAvail(true);
-    try { await api.put("/profile", { availability: next }); await refresh(); } catch {} finally { setSavingAvail(false); }
-  };
 
   const upcoming = jobs.filter((j) => j.status !== "completed").slice(0, 5);
 
@@ -143,18 +135,23 @@ export default function Dashboard() {
         </Card>
 
         {isCleaner && (
-          <Card style={{ gap: spacing.sm }} testID="availability-card">
+          <Card onPress={() => router.push("/availability")} testID="availability-card" style={{ gap: spacing.sm }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
               <Ionicons name="calendar-clear-outline" size={18} color={colors.brand} />
               <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface, flex: 1 }}>My Availability</Text>
-              {savingAvail ? <Text style={{ fontSize: 11, color: colors.muted }}>Saving…</Text> : null}
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
             </View>
-            <Text style={{ fontSize: 12, color: colors.muted }}>Tap days you can work. Jobs match your availability.</Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: 4 }}>
-              {WEEKDAYS.map((d) => (
-                <Chip key={d} label={d} active={(user?.availability || []).includes(d)} onPress={() => toggleDay(d)} testID={`avail-${d}`} />
-              ))}
-            </View>
+            {(user?.availability || []).length === 0 ? (
+              <Text style={{ fontSize: 12.5, color: colors.error }}>Not set — tap to add the days & hours you can work.</Text>
+            ) : (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {WEEKDAYS.filter((d) => (user?.availability || []).includes(d)).map((d) => {
+                  const s = user?.availability_schedule?.[d];
+                  const label = !s || s.mode === "all" ? `${d} · all day` : `${d} · ${(s.windows || []).length} window${(s.windows || []).length === 1 ? "" : "s"}`;
+                  return <View key={d} style={styles.availPill}><Text style={styles.availPillText}>{label}</Text></View>;
+                })}
+              </View>
+            )}
           </Card>
         )}
 
@@ -219,6 +216,8 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
   statLabel: { fontSize: 12, color: colors.muted },
   section: { fontSize: 18, fontWeight: "700", color: colors.onSurface },
+  availPill: { backgroundColor: colors.sage, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
+  availPillText: { fontSize: 12, fontWeight: "700", color: colors.brand },
   link: { fontSize: 14, color: colors.brand, fontWeight: "600" },
   jobTitle: { fontSize: 16, fontWeight: "700", color: colors.onSurface },
   jobMeta: { fontSize: 12.5, color: colors.muted },

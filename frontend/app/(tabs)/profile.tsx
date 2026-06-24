@@ -22,7 +22,6 @@ export default function Profile() {
   const [saved, setSaved] = useState(false);
   const [experience, setExperience] = useState(user?.experience_summary || "");
   const [portfolio, setPortfolio] = useState<string[]>(user?.portfolio || []);
-  const [availability, setAvailability] = useState<string[]>(user?.availability || []);
   const [myReviews, setMyReviews] = useState<any>(null);
   const isCleaner = user?.role === "cleaner" || user?.role === "owner_cleaner" || user?.role === "admin";
 
@@ -52,7 +51,6 @@ export default function Profile() {
         auto_accept: autoAccept,
         experience_summary: experience,
         portfolio,
-        availability,
       });
       setUser(res.user);
       setSaved(true);
@@ -163,14 +161,18 @@ export default function Profile() {
 
             <View style={{ gap: 8 }}>
               <Text style={styles.section}>Availability</Text>
-              <Text style={[styles.hint, availability.length === 0 && { color: colors.error }]}>Required — you can only be assigned jobs on these days.</Text>
-              <View style={styles.qualWrap}>
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                  <Chip key={d} label={d} active={availability.includes(d)}
-                    onPress={() => setAvailability(availability.includes(d) ? availability.filter((x) => x !== d) : [...availability, d])}
-                    testID={`avail-${d}`} />
-                ))}
-              </View>
+              <Text style={[styles.hint, (user?.availability || []).length === 0 && { color: colors.error }]}>Required — set the days & hours you can work.</Text>
+              <Pressable onPress={() => router.push("/availability")} style={styles.availBtn} testID="edit-availability">
+                <Ionicons name="calendar-clear-outline" size={18} color={colors.brand} />
+                <View style={{ flex: 1 }}>
+                  {(user?.availability || []).length === 0 ? (
+                    <Text style={styles.availBtnText}>Set your availability</Text>
+                  ) : (
+                    <Text style={styles.availBtnText}>{(user?.availability || []).join(", ")}</Text>
+                  )}
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+              </Pressable>
             </View>
           </Card>
         )}
@@ -216,6 +218,8 @@ const styles = StyleSheet.create({
   tierIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   section: { fontSize: 17, fontWeight: "700", color: colors.onSurface },
   hint: { fontSize: 12.5, color: colors.muted },
+  availBtn: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceTertiary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
+  availBtnText: { fontSize: 14, fontWeight: "600", color: colors.onSurface },
   qualWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   switchRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   switchLabel: { fontSize: 15, fontWeight: "600", color: colors.onSurface },

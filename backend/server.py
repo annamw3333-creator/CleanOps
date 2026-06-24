@@ -10,7 +10,7 @@ import secrets
 import math
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict, Any
 from datetime import datetime, timezone, timedelta
 import httpx
 import stripe
@@ -170,6 +170,7 @@ class ProfileIn(BaseModel):
     experience_summary: Optional[str] = None
     portfolio: Optional[List[str]] = None
     availability: Optional[List[str]] = None
+    availability_schedule: Optional[Dict[str, Any]] = None
     role: Optional[Literal["cleaner", "company_owner", "client", "owner_cleaner"]] = None
 
 class SubscriptionIn(BaseModel):
@@ -371,6 +372,9 @@ async def update_profile(body: ProfileIn, user=Depends(get_current_user)):
     updates = {k: v for k, v in body.dict().items() if v is not None}
     if "portfolio" in updates and len(updates["portfolio"]) > 25:
         raise HTTPException(status_code=400, detail="You can upload at most 25 photos")
+    if body.availability_schedule is not None:
+        # keep day-level availability in sync with the detailed schedule (days that have any availability)
+        updates["availability"] = list(body.availability_schedule.keys())
     if updates:
         await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})
     updated = await db.users.find_one({"user_id": user["user_id"]})
@@ -403,6 +407,7 @@ async def get_public_user(user_id: str, user=Depends(get_current_user)):
         "phone": u.get("phone", ""), "bio": u.get("bio", ""), "experience_summary": u.get("experience_summary", ""),
         "portfolio": u.get("portfolio", []), "qualifications": u.get("qualifications", []),
         "hourly_rate": u.get("hourly_rate", 0), "availability": u.get("availability", []),
+        "availability_schedule": u.get("availability_schedule", {}),
         "completed_count": await completed_count(user_id), "member_since": iso(u.get("created_at")),
         "onboarding_pct": await onboarding_pct(user_id),
     }
