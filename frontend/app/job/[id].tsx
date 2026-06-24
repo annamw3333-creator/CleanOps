@@ -82,6 +82,7 @@ export default function JobDetail() {
     await api.post(`/jobs/${id}/enroute`, { latitude: c?.latitude ?? job.latitude, longitude: c?.longitude ?? job.longitude });
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   });
+  const requestAddon = (name: string) => act(async () => { await api.post(`/jobs/${id}/addon`, { name }); await Haptics.selectionAsync(); });
 
   const pickPhoto = async (itemId: string) => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -159,6 +160,28 @@ export default function JobDetail() {
             {job.client_notes ? <NoteCard title="Client Notes" text={job.client_notes} /> : null}
             {job.manager_notes ? <NoteCard title="Scope of Work / Manager Notes" text={job.manager_notes} /> : null}
 
+            {(isPoster || isAssigned) && job.status !== "completed" && job.status !== "cancelled" && (
+              <Card>
+                <Text style={styles.sectionTitle}>Add-on Services</Text>
+                {job.addons?.length > 0 && (
+                  <View style={[styles.wrap, { marginBottom: spacing.sm }]}>
+                    {job.addons.map((ad: string) => (
+                      <View key={ad} style={styles.addonActive}><Ionicons name="checkmark-circle" size={12} color={colors.sageDeep} /><Text style={styles.addonActiveText}>{ad}</Text></View>
+                    ))}
+                  </View>
+                )}
+                <Text style={[styles.rate, { marginBottom: spacing.sm }]}>Tap to request an extra service for this job.</Text>
+                <View style={styles.wrap}>
+                  {["Oven", "Fridge", "Windows", "Laundry", "Garage", "Carpet"].filter((x) => !(job.addons || []).includes(x)).map((ad) => (
+                    <Pressable key={ad} onPress={() => requestAddon(ad)} style={styles.addonChip} testID={`addon-${ad}`}>
+                      <Ionicons name="add" size={13} color={colors.brand} />
+                      <Text style={styles.addonChipText}>{ad}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </Card>
+            )}
+
             {job.required_qualifications?.length > 0 && (
               <Card>
                 <Text style={styles.sectionTitle}>Required Qualifications</Text>
@@ -186,7 +209,7 @@ export default function JobDetail() {
             {isPoster && job.applicants_info?.length > 0 && (
               <Card>
                 <Text style={styles.sectionTitle}>Qualified Applicants</Text>
-                {job.applicants_info.map((a: any) => (
+                {job.applicants_info.map((a: any, idx: number) => (
                   <View key={a.user_id} style={styles.applicant}>
                     <View style={styles.person}><Avatar uri={a.avatar} name={a.name} size={36} />
                       <View style={{ flex: 1 }}>
@@ -194,6 +217,12 @@ export default function JobDetail() {
                         <Text style={styles.rate}>${a.hourly_rate}/hr · {a.qualifications.length} quals</Text>
                         <Text style={styles.rate}>{a.completed_count || 0} cleans completed</Text>
                       </View>
+                      {a.match_score != null && (
+                        <View style={[styles.matchBadge, idx === 0 && { backgroundColor: colors.sageDeep }]}>
+                          <Ionicons name={idx === 0 ? "ribbon" : "stats-chart"} size={12} color={idx === 0 ? "#fff" : colors.brand} />
+                          <Text style={[styles.matchText, idx === 0 && { color: "#fff" }]}>{idx === 0 ? `Best Match: ${a.match_score}%` : `${a.match_score}% fit`}</Text>
+                        </View>
+                      )}
                     </View>
                     {a.bio ? <Text style={styles.bio}>{a.bio}</Text> : null}
                     <View style={{ flexDirection: "row", gap: spacing.sm }}>
@@ -396,6 +425,12 @@ const styles = StyleSheet.create({
   personName: { fontSize: 14, fontWeight: "600", color: colors.onSurface },
   rate: { fontSize: 12, color: colors.muted },
   applicant: { gap: spacing.sm, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider },
+  matchBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.sage, paddingHorizontal: 8, paddingVertical: 5, borderRadius: radius.pill, alignSelf: "flex-start" },
+  matchText: { fontSize: 11, fontWeight: "800", color: colors.brand },
+  addonChip: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.surfaceTertiary, paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },
+  addonChipText: { fontSize: 12.5, fontWeight: "700", color: colors.onSurface },
+  addonActive: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.sage, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill },
+  addonActiveText: { fontSize: 12.5, fontWeight: "700", color: colors.sageDeep },
   bio: { fontSize: 13, color: colors.muted },
   photoBtn: { borderRadius: radius.md, overflow: "hidden", borderWidth: 2, borderColor: colors.border, borderStyle: "dashed" },
   photo: { width: "100%", height: 160 },

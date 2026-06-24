@@ -39,7 +39,7 @@ export default function Jobs() {
 
   return (
     <Screen>
-      <Header title={isCleaner ? "Jobs" : "My Jobs"} />
+      <Header title={isCleaner ? "Jobs" : "Work Hub"} />
       {tabs.length > 1 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 56 }} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.md }}>
           {tabs.map((t) => <Chip key={t.k} label={t.l} active={tab === t.k} onPress={() => setTab(t.k)} testID={`jobs-tab-${t.k}`} />)}

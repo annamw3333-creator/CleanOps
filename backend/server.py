@@ -33,14 +33,14 @@ EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/
 ADMIN_EMAIL = "aestheticabodesyyc@gmail.com"
 
 stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
-TIER_PRICING = {"pro": 1900, "business": 4900}  # cents / month
+TIER_PRICING = {"pro": 1900, "business": 9900}  # cents / month
 _price_cache: dict = {}
 
 async def get_price_id(tier: str) -> str:
     if tier in _price_cache:
         return _price_cache[tier]
     amount = TIER_PRICING[tier]
-    lookup = f"auto_abodes_{tier}_monthly"
+    lookup = f"abodeops_{tier}_monthly_{amount}"
     existing = stripe.Price.list(lookup_keys=[lookup], limit=1)
     if existing.data:
         _price_cache[tier] = existing.data[0].id
@@ -430,7 +430,7 @@ async def payroll_calculate(body: PayrollIn, user=Depends(get_current_user)):
 # ---------------- Jobs ----------------
 async def enrich_job(job: dict):
     job = clean(dict(job))
-    job.pop("cleaner_locations", None)  # live locations are private; exposed only via /jobs/live to the poster
+    job.pop("cleaner_locations", None)  # live locations are private; exposed only via /fleet/live to the poster
     assigned = []
     for cid in job.get("assigned_cleaners", []):
         c = await db.users.find_one({"user_id": cid})
@@ -439,6 +439,39 @@ async def enrich_job(job: dict):
                              "completed_count": await completed_count(c["user_id"])})
     job["assigned_cleaners_info"] = assigned
     return job
+
+async def log_activity(job: dict, kind: str, text: str):
+    try:
+        await db.activity.insert_one({
+            "activity_id": f"act_{uuid.uuid4().hex[:10]}",
+            "poster_id": job.get("poster_id"),
+            "job_id": job.get("job_id"),
+            "job_title": job.get("title"),
+            "kind": kind, "text": text, "created_at": now_utc(),
+        })
+    except Exception:
+        pass
+
+def match_score(cleaner: dict, job: dict, completed: int = 0) -> int:
+    score = 55
+    req = set(job.get("required_qualifications", []))
+    have = set(cleaner.get("qualifications", []))
+    if req:
+        score += int(25 * len(req & have) / len(req))
+    else:
+        score += 12
+    wd = job_weekday(job.get("date", ""))
+    avail = cleaner.get("availability", [])
+    if wd and avail:
+        score += 12 if wd in avail else -15
+    elif avail:
+        score += 6
+    if cleaner.get("experience_summary"):
+        score += 6
+    if len(cleaner.get("portfolio", [])) >= 10:
+        score += 5
+    score += min(10, completed * 2)
+    return max(20, min(99, score))
 
 @api_router.post("/jobs")
 async def create_job(body: JobIn, user=Depends(get_current_user)):
@@ -465,6 +498,7 @@ async def create_job(body: JobIn, user=Depends(get_current_user)):
         "created_at": now_utc(),
     }
     await db.jobs.insert_one(doc)
+    await log_activity(doc, "created", f"New job posted: {body.title}")
     return await enrich_job(doc)
 
 @api_router.get("/jobs")
@@ -502,10 +536,13 @@ async def get_job(job_id: str, user=Depends(get_current_user)):
     for aid in job.get("applicants", []):
         c = await db.users.find_one({"user_id": aid})
         if c:
+            cc = await completed_count(c["user_id"])
             apps.append({"user_id": c["user_id"], "name": c["name"], "avatar": c.get("avatar", ""),
                          "qualifications": c.get("qualifications", []), "hourly_rate": c.get("hourly_rate", 0),
                          "bio": c.get("bio", ""), "experience_summary": c.get("experience_summary", ""),
-                         "portfolio": c.get("portfolio", []), "completed_count": await completed_count(c["user_id"])})
+                         "portfolio": c.get("portfolio", []), "completed_count": cc,
+                         "match_score": match_score(c, job, cc)})
+    apps.sort(key=lambda a: a["match_score"], reverse=True)
     enriched["applicants_info"] = apps
     return enriched
 
@@ -598,6 +635,7 @@ async def checkin_job(job_id: str, user=Depends(get_current_user)):
     if not job or user["user_id"] not in job.get("assigned_cleaners", []):
         raise HTTPException(status_code=403, detail="Not assigned to this job")
     await db.jobs.update_one({"job_id": job_id}, {"$set": {"status": "in_progress", "checked_in_at": now_utc()}})
+    await log_activity(job, "arrived", f"{user['name']} arrived on site at {job.get('title')}")
     updated = await db.jobs.find_one({"job_id": job_id})
     return await enrich_job(updated)
 
@@ -648,6 +686,7 @@ async def complete_job(job_id: str, user=Depends(get_current_user)):
         "log_id": f"log_{uuid.uuid4().hex[:10]}", "cleaner_id": user["user_id"], "job_id": job_id,
         "job_title": job.get("title"), "hours": hours, "pay": pay, "date": now_utc(),
     })
+    await log_activity(job, "completed", f"{job.get('title')} completed by {user['name']}")
     updated = await db.jobs.find_one({"job_id": job_id})
     return await enrich_job(updated)
 
@@ -891,6 +930,7 @@ async def public_feedback_post(token: str, body: PublicFeedbackIn):
     await db.jobs.update_one({"job_id": job["job_id"]}, {"$set": {"client_feedback": {
         "rating": body.rating, "comment": body.comment or "", "client_name": body.client_name or "Client",
         "created_at": iso(now_utc())}}})
+    await log_activity(job, "feedback", f"Client left {body.rating}★ feedback on {job.get('title')}")
     return {"ok": True}
 
 # ---------------- Client list ----------------
@@ -1107,7 +1147,8 @@ async def grab_job(job_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"You are not available on {wd}")
     res = await db.jobs.update_one(
         {"job_id": job_id, "assigned_cleaners": {"$size": 0}},
-        {"$addToSet": {"assigned_cleaners": user["user_id"]}, "$pull": {"applicants": user["user_id"]}},
+        {"$addToSet": {"assigned_cleaners": user["user_id"]}, "$pull": {"applicants": user["user_id"]},
+         "$set": {f"cleaner_responses.{user['user_id']}": "accepted"}},
     )
     if res.modified_count == 0:
         raise HTTPException(status_code=409, detail="This job was just taken by another cleaner")
@@ -1138,6 +1179,7 @@ async def enroute_job(job_id: str, body: LocationIn, user=Depends(get_current_us
         raise HTTPException(status_code=403, detail="Not assigned to this job")
     await db.jobs.update_one({"job_id": job_id}, {"$set": {"enroute_at": now_utc(), "tracking": True}})
     await _set_job_location(job_id, user, "enroute", body.latitude, body.longitude)
+    await log_activity(job, "enroute", f"{user['name']} is on the way to {job.get('title')}")
     return await enrich_job(await db.jobs.find_one({"job_id": job_id}))
 
 @api_router.post("/jobs/{job_id}/location")
@@ -1174,6 +1216,57 @@ async def live_jobs(user=Depends(get_current_user)):
         ej["live_cleaners"] = live
         out.append(ej)
     return out
+
+# ---------------- Activity feed, metrics & add-ons ----------------
+@api_router.get("/activity")
+async def get_activity(user=Depends(get_current_user)):
+    q = {} if user["role"] == "admin" else {"poster_id": user["user_id"]}
+    acts = await db.activity.find(q).sort("created_at", -1).to_list(40)
+    return [{"activity_id": a["activity_id"], "kind": a.get("kind"), "text": a.get("text"),
+             "job_id": a.get("job_id"), "job_title": a.get("job_title"),
+             "created_at": iso(a.get("created_at"))} for a in acts]
+
+@api_router.get("/metrics")
+async def get_metrics(user=Depends(get_current_user)):
+    if user["role"] not in ("company_owner", "owner_cleaner", "client", "admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    q = {} if user["role"] == "admin" else {"poster_id": user["user_id"]}
+    jobs = await db.jobs.find(q).to_list(3000)
+    now = now_utc()
+    revenue_today = 0.0
+    payroll_owed = 0.0
+    completed_today = 0
+    completed_total = 0
+    active_cleaner_ids = set()
+    for j in jobs:
+        if j.get("status") == "completed":
+            completed_total += 1
+            payroll_owed += j.get("logged_pay") or round(j.get("estimated_duration", 0) * j.get("pay_rate", 0), 2)
+            ca = _aware(j.get("completed_at"))
+            if isinstance(ca, datetime) and ca.date() == now.date():
+                completed_today += 1
+                revenue_today += round(j.get("estimated_duration", 0) * j.get("pay_rate", 0), 2)
+        if j.get("status") in ("pending", "in_progress"):
+            for cid in j.get("assigned_cleaners", []):
+                active_cleaner_ids.add(cid)
+    return {"revenue_today": round(revenue_today, 2), "payroll_owed": round(payroll_owed, 2),
+            "active_cleaners": len(active_cleaner_ids), "completed_today": completed_today,
+            "completed_total": completed_total}
+
+class AddonIn(BaseModel):
+    name: str
+
+@api_router.post("/jobs/{job_id}/addon")
+async def request_addon(job_id: str, body: AddonIn, user=Depends(get_current_user)):
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    allowed = user["role"] == "admin" or job["poster_id"] == user["user_id"] or user["user_id"] in job.get("assigned_cleaners", [])
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    await db.jobs.update_one({"job_id": job_id}, {"$addToSet": {"addons": body.name}})
+    await log_activity(job, "addon", f"{body.name} add-on requested for {job.get('title')}")
+    return await enrich_job(await db.jobs.find_one({"job_id": job_id}))
 
 app.include_router(api_router)
 app.add_middleware(

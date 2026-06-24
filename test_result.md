@@ -162,8 +162,31 @@ backend:
         -agent: "main"
         -comment: "Curl-verified: POST /jobs/{id}/enroute (sets tracking + shares location), POST /jobs/{id}/location (ping), GET /fleet/live (poster/admin only - 403 for cleaner). Privacy: cleaner_locations stripped from enrich_job so regular /jobs/{id} does NOT leak location; only GET /fleet/live exposes live_cleaners to the poster. Stale (>60min) and completed-phase locations filtered. NOTE: path is /api/fleet/live (NOT /jobs/live which collided with /jobs/{job_id})."
 
+  - task: "Match score, activity feed, metrics, add-ons, premium pricing"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Curl-verified: GET /metrics (revenue_today, payroll_owed, active_cleaners, completed_today/total), GET /activity (poster-scoped feed populated by create/enroute/arrived/completed/addon/feedback hooks), POST /jobs/{id}/addon (appends addon + logs feed), match_score added to applicants_info (sorted desc, top=Best Match, e.g. 98%). Business tier raised to $99 (TIER_PRICING + versioned Stripe lookup key abodeops_business_monthly_9900); business checkout returns a fresh Stripe checkout_url (immutability fix confirmed)."
+
 frontend:
-  - task: "Driver Mode mini-map + Live Crew Map screen + On My Way lifecycle"
+  - task: "Command Center metrics + Operations Feed, premium subscription, match badge, add-ons, empty-state CTAs"
+    implemented: true
+    working: "NA"
+    file: "app/operations.tsx, app/subscription.tsx, app/job/[id].tsx, src/components/UI.tsx, src/theme.ts, app/(tabs)/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Smoke-tested: Command Center shows 2x2 metrics grid + Operations Feed (LIVE badge, real events, relative times). Subscription page redesigned with hero + Business $99 'MOST POPULAR' ribbon + full premium feature list. Job detail shows 'Best Match: X%' on top applicant + add-on chips (Oven/Fridge/etc). EmptyState now supports CTA button (dashboard agenda -> Create Job / Open Driver Mode). Labels renamed: My Jobs->Work Hub, Post a Job->Create Job, Operations->Command Center."
+
     implemented: true
     working: "NA"
     file: "app/driver.tsx, app/live-map.tsx, app/job/[id].tsx, src/components/JobMap.tsx, src/components/JobMap.web.tsx, app/(tabs)/index.tsx"

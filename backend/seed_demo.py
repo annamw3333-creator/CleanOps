@@ -76,6 +76,21 @@ async def main():
         for i, j in enumerate([jobs[3], jobs[4]])
     ])
 
+    # seed activity feed for the owner
+    await db.activity.delete_many({"demo": True})
+    feed = [
+        ("completed", "Condo refresh completed by Casey Cleaner", jobs[4]),
+        ("addon", "Oven add-on requested for Move-out deep clean", jobs[3]),
+        ("arrived", "Casey Cleaner arrived on site at Move-out deep clean", jobs[3]),
+        ("enroute", "Casey Cleaner is on the way to Move-out deep clean", jobs[3]),
+        ("created", "New job posted: Weekly clean - Riverbend", jobs[0]),
+    ]
+    await db.activity.insert_many([
+        {"demo": True, "activity_id": f"demoact_{i}", "poster_id": owner, "job_id": j["job_id"],
+         "job_title": j["title"], "kind": kind, "text": text, "created_at": today - timedelta(minutes=15 * i)}
+        for i, (kind, text, j) in enumerate(feed)
+    ])
+
     print("Seeded: owner@abodeops.com / cleaner@abodeops.com / client@abodeops.com (pass123)")
     print(f"owner={owner} cleaner={cleaner} client={client}")
 

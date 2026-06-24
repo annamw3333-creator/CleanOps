@@ -41,7 +41,7 @@ export default function PostJob() {
 
   return (
     <Screen>
-      <Header title="Post a Job" onBack={() => router.back()} />
+      <Header title="Create Job" onBack={() => router.back()} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing["3xl"], gap: spacing.md }} keyboardShouldPersistTaps="handled">
           <Input label="Job Title" value={f.title} onChangeText={(v: string) => set("title", v)} placeholder="3BR Apartment Deep Clean" testID="job-title" />
@@ -74,7 +74,7 @@ export default function PostJob() {
           </View>
 
           {error ? <Text style={styles.error} testID="post-error">{error}</Text> : null}
-          <Button title="Post Job" onPress={submit} loading={loading} testID="submit-job-button" />
+          <Button title="Create Job" onPress={submit} loading={loading} testID="submit-job-button" />
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

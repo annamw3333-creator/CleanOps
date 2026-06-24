@@ -78,7 +78,7 @@ export default function Dashboard() {
         )}
 
         {!isCleaner && (
-          <Button title="Post a New Job" icon="add-circle-outline" onPress={() => router.push("/post-job")} testID="post-job-button" />
+          <Button title="Create Job" icon="add-circle-outline" onPress={() => router.push("/post-job")} testID="post-job-button" />
         )}
 
         {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
@@ -88,7 +88,7 @@ export default function Dashboard() {
               <Ionicons name="speedometer-outline" size={22} color={colors.gold} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: colors.onSurfaceInverse }}>Operations Dashboard</Text>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: colors.onSurfaceInverse }}>Command Center</Text>
               <Text style={{ fontSize: 12.5, color: "#ffffff99" }}>Assign, start, complete & manage all jobs</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#ffffff99" />
@@ -165,7 +165,10 @@ export default function Dashboard() {
 
         {upcoming.length === 0 ? (
           <Card><EmptyState icon="calendar-outline" title="No active jobs"
-            subtitle={isCleaner ? "Check the map for available jobs you qualify for." : "Post a job to get started."} /></Card>
+            subtitle={isCleaner ? "Go online in Driver Mode or check the map for jobs near you." : "Create your first job and your crew can get to work."}
+            actionLabel={isCleaner ? "Open Driver Mode" : "Create Job"}
+            onAction={() => router.push(isCleaner ? "/driver" : "/post-job")}
+            testID="dash-empty-cta" /></Card>
         ) : upcoming.map((j) => <JobRow key={j.job_id} job={j} onPress={() => router.push(`/job/${j.job_id}`)} />)}
       </ScrollView>
     </Screen>

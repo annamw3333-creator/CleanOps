@@ -74,6 +74,11 @@ export default function Subscription() {
     <Screen>
       <Header title="Subscription" subtitle="Choose the plan that fits you" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing["3xl"], gap: spacing.lg }}>
+        <View style={styles.hero}>
+          <View style={styles.heroBadge}><Ionicons name="sparkles" size={14} color={colors.gold} /><Text style={styles.heroBadgeText}>AbodeOps Business</Text></View>
+          <Text style={styles.heroTitle}>Run your entire cleaning operation</Text>
+          <Text style={styles.heroSub}>Live GPS crew tracking, teams, onboarding, payroll previews and messaging — all in one place.</Text>
+        </View>
         {isAdmin && (
           <View style={styles.adminCard}>
             <Ionicons name="shield-checkmark" size={22} color={colors.gold} />
@@ -84,9 +89,15 @@ export default function Subscription() {
         {SUBSCRIPTION_TIERS.map((t) => {
           const active = current === t.id;
           return (
-            <View key={t.id} style={[styles.card, active && { borderColor: t.accent, borderWidth: 2 }]} testID={`tier-${t.id}`}>
+            <View key={t.id} style={[styles.card, t.popular && { borderColor: t.accent, borderWidth: 2 }, active && { borderColor: t.accent, borderWidth: 2 }]} testID={`tier-${t.id}`}>
+              {t.popular && (
+                <View style={[styles.ribbon, { backgroundColor: t.accent }]}>
+                  <Ionicons name="star" size={11} color={colors.onGold} />
+                  <Text style={styles.ribbonText}>MOST POPULAR</Text>
+                </View>
+              )}
               <View style={styles.cardTop}>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.tierName}>{t.name}</Text>
                   <Text style={styles.tagline}>{t.tagline}</Text>
                 </View>
@@ -107,18 +118,25 @@ export default function Subscription() {
                 <View style={styles.currentBadge}><Ionicons name="checkmark" size={16} color={colors.success} /><Text style={styles.currentText}>Current plan</Text></View>
               ) : (
                 <Button title={t.id === "free" ? "Downgrade to Free" : `Upgrade to ${t.name}`} onPress={() => onSelect(t.id)} loading={busy === t.id}
-                  variant={t.id === "business" ? "secondary" : "primary"} testID={`upgrade-${t.id}`} />
+                  variant={t.popular ? "secondary" : "primary"} testID={`upgrade-${t.id}`} />
               )}
             </View>
           );
         })}
-        <Text style={styles.note}>Secure checkout by Stripe · test mode. Use card 4242 4242 4242 4242.</Text>
+        <Text style={styles.note}>Cancel anytime · Secure checkout by Stripe (test mode). Use card 4242 4242 4242 4242.</Text>
       </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  hero: { backgroundColor: colors.surfaceInverse, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm },
+  heroBadge: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", backgroundColor: "#ffffff15", paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
+  heroBadgeText: { fontSize: 11.5, fontWeight: "800", color: colors.gold, letterSpacing: 0.3 },
+  heroTitle: { fontSize: 22, fontWeight: "800", color: colors.onSurfaceInverse, lineHeight: 28 },
+  heroSub: { fontSize: 13.5, color: "#ffffffbb", lineHeight: 19 },
+  ribbon: { position: "absolute", top: -1, right: 16, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderBottomLeftRadius: radius.sm, borderBottomRightRadius: radius.sm },
+  ribbonText: { fontSize: 10.5, fontWeight: "900", color: colors.onGold, letterSpacing: 0.5 },
   adminCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceInverse, padding: spacing.md, borderRadius: radius.md },
   adminText: { color: colors.onSurfaceInverse, fontWeight: "600", fontSize: 13, flex: 1 },
   msg: { fontSize: 14, fontWeight: "600", color: colors.brand, textAlign: "center" },

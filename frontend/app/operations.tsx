@@ -15,18 +15,43 @@ const SECTIONS = [
   { key: "cancelled", label: "Cancelled", icon: "close-circle-outline" },
 ];
 
+const ACTIVITY: any = {
+  created: { icon: "add-circle-outline", color: "#1A5F7A" },
+  enroute: { icon: "navigate-outline", color: "#1A5F7A" },
+  arrived: { icon: "location-outline", color: "#D4AF37" },
+  completed: { icon: "checkmark-circle-outline", color: "#2B7043" },
+  addon: { icon: "add-outline", color: "#D4AF37" },
+  feedback: { icon: "star-outline", color: "#D4AF37" },
+  default: { icon: "ellipse-outline", color: "#6B7280" },
+};
+
+function timeAgo(iso?: string) {
+  if (!iso) return "";
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+
 export default function Operations() {
   const router = useRouter();
   const [jobs, setJobs] = useState<any[]>([]);
   const [cleaners, setCleaners] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<any>(null);
+  const [feed, setFeed] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [assignFor, setAssignFor] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [j, u] = await Promise.all([api.get("/jobs?scope=mine"), api.get("/users")]);
+      const [j, u, m, a] = await Promise.all([
+        api.get("/jobs?scope=mine"), api.get("/users"), api.get("/metrics"), api.get("/activity"),
+      ]);
       setJobs(j);
       setCleaners(u.filter((x: any) => x.role === "cleaner" || x.role === "owner_cleaner"));
+      setMetrics(m);
+      setFeed(a);
     } catch {}
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -49,22 +74,45 @@ export default function Operations() {
   const today = new Date().toISOString().slice(0, 10);
   const bucket = (key: string) => key === "today" ? jobs.filter((j) => j.date === today) : jobs.filter((j) => j.status === key);
 
-  const counts: any = {
-    pending: jobs.filter((j) => j.status === "pending").length,
-    in_progress: jobs.filter((j) => j.status === "in_progress").length,
-    completed: jobs.filter((j) => j.status === "completed").length,
-  };
-
   return (
     <Screen>
-      <Header title="Operations" subtitle="Command center for all your jobs" onBack={() => router.back()} />
+      <Header title="Command Center" subtitle="Oversee every job, cleaner and assignment" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100, gap: spacing.xl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
 
-        <View style={styles.summary}>
-          <Summary color={statusColors.pending} label="Pending" value={counts.pending} />
-          <Summary color={statusColors.in_progress} label="Active" value={counts.in_progress} />
-          <Summary color={statusColors.completed} label="Done" value={counts.completed} />
+        <View style={styles.metricGrid}>
+          <Metric icon="cash-outline" label="Revenue today" value={`$${metrics?.revenue_today ?? 0}`} color={colors.sageDeep} />
+          <Metric icon="wallet-outline" label="Payroll owed" value={`$${metrics?.payroll_owed ?? 0}`} color={colors.gold} />
+          <Metric icon="people-outline" label="Active cleaners" value={metrics?.active_cleaners ?? 0} color={colors.brand} />
+          <Metric icon="checkmark-done-outline" label="Done today" value={metrics?.completed_today ?? 0} color={colors.success} />
+        </View>
+
+        <View style={{ gap: spacing.sm }}>
+          <View style={styles.sectionHead}>
+            <Ionicons name="pulse-outline" size={18} color={colors.brand} />
+            <Text style={styles.sectionTitle}>Operations Feed</Text>
+            <View style={styles.liveTag}><View style={styles.liveDot} /><Text style={styles.liveTagText}>LIVE</Text></View>
+          </View>
+          <Card style={{ gap: 0, paddingVertical: spacing.xs }}>
+            {feed.length === 0 ? (
+              <View style={{ paddingVertical: spacing.lg, alignItems: "center", gap: 4 }}>
+                <Ionicons name="radio-outline" size={24} color={colors.borderStrong} />
+                <Text style={styles.empty}>Activity will appear here as your crew works.</Text>
+              </View>
+            ) : feed.slice(0, 12).map((a, i) => {
+              const cfg = ACTIVITY[a.kind] || ACTIVITY.default;
+              return (
+                <Pressable key={a.activity_id} onPress={() => a.job_id && router.push(`/job/${a.job_id}`)}
+                  style={[styles.feedRow, i < Math.min(feed.length, 12) - 1 && styles.feedDivider]} testID={`feed-${a.activity_id}`}>
+                  <View style={[styles.feedIcon, { backgroundColor: cfg.color + "22" }]}>
+                    <Ionicons name={cfg.icon} size={15} color={cfg.color} />
+                  </View>
+                  <Text style={styles.feedText} numberOfLines={2}>{a.text}</Text>
+                  <Text style={styles.feedTime}>{timeAgo(a.created_at)}</Text>
+                </Pressable>
+              );
+            })}
+          </Card>
         </View>
 
         {SECTIONS.map((s) => {
@@ -150,11 +198,13 @@ export default function Operations() {
   );
 }
 
-const Summary = ({ color, label, value }: any) => (
-  <View style={styles.sumCard}>
-    <View style={[styles.dot, { backgroundColor: color }]} />
-    <Text style={styles.sumValue}>{value}</Text>
-    <Text style={styles.sumLabel}>{label}</Text>
+const Metric = ({ icon, label, value, color }: any) => (
+  <View style={styles.metricCard}>
+    <View style={[styles.metricIcon, { backgroundColor: color + "22" }]}>
+      <Ionicons name={icon} size={16} color={color} />
+    </View>
+    <Text style={styles.metricValue} numberOfLines={1}>{value}</Text>
+    <Text style={styles.metricLabel}>{label}</Text>
   </View>
 );
 const ActionBtn = ({ icon, label, color, onPress, testID }: any) => (
@@ -165,11 +215,19 @@ const ActionBtn = ({ icon, label, color, onPress, testID }: any) => (
 );
 
 const styles = StyleSheet.create({
-  summary: { flexDirection: "row", gap: spacing.sm },
-  sumCard: { flex: 1, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, alignItems: "flex-start", gap: 4 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  sumValue: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
-  sumLabel: { fontSize: 12, color: colors.muted },
+  metricGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  metricCard: { width: "47.8%", flexGrow: 1, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, gap: 6 },
+  metricIcon: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  metricValue: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
+  metricLabel: { fontSize: 12, color: colors.muted },
+  liveTag: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.error + "18", paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.error },
+  liveTagText: { fontSize: 10, fontWeight: "900", color: colors.error, letterSpacing: 0.5 },
+  feedRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.sm + 2 },
+  feedDivider: { borderBottomWidth: 1, borderBottomColor: colors.divider },
+  feedIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  feedText: { flex: 1, fontSize: 13, color: colors.onSurface, lineHeight: 18 },
+  feedTime: { fontSize: 11.5, color: colors.muted, fontWeight: "600" },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   sectionTitle: { fontSize: 17, fontWeight: "700", color: colors.onSurface },
   badge: { backgroundColor: colors.surfaceTertiary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill, minWidth: 24, alignItems: "center" },

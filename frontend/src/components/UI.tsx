@@ -96,12 +96,20 @@ export function Avatar({ uri, name, size = 40 }: { uri?: string; name?: string; 
   );
 }
 
-export function EmptyState({ icon, title, subtitle }: { icon: any; title: string; subtitle?: string }) {
+export function EmptyState({ icon, title, subtitle, actionLabel, onAction, testID }: { icon: any; title: string; subtitle?: string; actionLabel?: string; onAction?: () => void; testID?: string }) {
   return (
     <View style={styles.empty}>
-      <View style={styles.emptyIcon}><Ionicons name={icon} size={32} color={colors.brand} /></View>
+      <View style={styles.emptyIconOuter}>
+        <View style={styles.emptyIcon}><Ionicons name={icon} size={30} color={colors.brand} /></View>
+      </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       {subtitle ? <Text style={styles.emptySub}>{subtitle}</Text> : null}
+      {actionLabel && onAction ? (
+        <Pressable onPress={onAction} style={styles.emptyAction} testID={testID}>
+          <Ionicons name="arrow-forward-circle" size={18} color={colors.onBrand} />
+          <Text style={styles.emptyActionText}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -169,9 +177,12 @@ const styles = StyleSheet.create({
   pill: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill, borderWidth: 1, alignSelf: "flex-start" },
   pillText: { fontSize: 12, fontWeight: "700" },
   empty: { alignItems: "center", justifyContent: "center", padding: spacing["2xl"], gap: spacing.sm },
-  emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
+  emptyIconOuter: { width: 84, height: 84, borderRadius: 42, backgroundColor: colors.sage + "55", alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
+  emptyIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" },
   emptyTitle: { fontSize: 17, fontWeight: "700", color: colors.onSurface, textAlign: "center" },
-  emptySub: { fontSize: 14, color: colors.muted, textAlign: "center" },
+  emptySub: { fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 20 },
+  emptyAction: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.brand, paddingVertical: 10, paddingHorizontal: 18, borderRadius: radius.pill, marginTop: spacing.sm },
+  emptyActionText: { fontSize: 14, fontWeight: "700", color: colors.onBrand },
   chip: { height: 36, paddingHorizontal: 16, borderRadius: radius.pill, borderWidth: 1, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   chipText: { fontSize: 13, fontWeight: "600" },
   ad: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceTertiary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderStyle: "dashed" },

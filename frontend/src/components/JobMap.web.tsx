@@ -15,7 +15,7 @@ export default function JobMap({ jobs, onSelect, people = [], meLocation }: {
         <Ionicons name="map-outline" size={16} color={colors.brand} />
         <Text style={styles.bannerText}>Map preview (live map renders on the mobile app)</Text>
       </View>
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingTop: 110, gap: spacing.md }}>
         {people.filter((p) => p.latitude && p.longitude).map((p) => (
           <Pressable key={`person-${p.user_id}`} onPress={() => onSelect({ ...p, _isPerson: true })} style={styles.row} testID={`map-person-${p.user_id}`}>
             <View style={[styles.personPin, { borderColor: (PHASE[p.phase] || PHASE.enroute).c }]}>
