@@ -2,12 +2,18 @@ import React from "react";
 import { StyleSheet, View, Text } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { statusColors } from "@/src/theme";
+import { isExpoGo } from "@/src/utils/runtime";
+import JobMapFallback from "./JobMapFallback";
 
 const PHASE_COLORS: Record<string, string> = { enroute: "#1A5F7A", on_site: "#D4AF37", completed: "#2B7043" };
 
 export default function JobMap({ jobs, region, onSelect, people = [], meLocation }: {
   jobs: any[]; region: any; onSelect: (j: any) => void; people?: any[]; meLocation?: { latitude: number; longitude: number } | null;
 }) {
+  // react-native-maps renders blank in Expo Go — show a clean list fallback during beta testing.
+  if (isExpoGo) {
+    return <JobMapFallback jobs={jobs} onSelect={onSelect} people={people} banner="Live map available in the full app · list view in beta" />;
+  }
   return (
     <MapView style={StyleSheet.absoluteFill} provider={PROVIDER_DEFAULT} initialRegion={region} testID="job-map" showsUserLocation={!!meLocation}>
       {jobs.map((j) => (
