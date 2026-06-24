@@ -1241,7 +1241,8 @@ async def get_metrics(user=Depends(get_current_user)):
     for j in jobs:
         if j.get("status") == "completed":
             completed_total += 1
-            payroll_owed += j.get("logged_pay") or round(j.get("estimated_duration", 0) * j.get("pay_rate", 0), 2)
+            if not j.get("payroll_paid"):
+                payroll_owed += j.get("logged_pay") or round(j.get("estimated_duration", 0) * j.get("pay_rate", 0), 2)
             ca = _aware(j.get("completed_at"))
             if isinstance(ca, datetime) and ca.date() == now.date():
                 completed_today += 1
@@ -1255,6 +1256,64 @@ async def get_metrics(user=Depends(get_current_user)):
 
 class AddonIn(BaseModel):
     name: str
+
+class PaidIn(BaseModel):
+    paid: bool = True
+
+@api_router.post("/jobs/{job_id}/mark-paid")
+async def mark_paid(job_id: str, body: PaidIn, user=Depends(get_current_user)):
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if user["role"] != "admin" and job["poster_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    await db.jobs.update_one({"job_id": job_id}, {"$set": {"payroll_paid": body.paid, "paid_at": now_utc() if body.paid else None}})
+    return {"ok": True, "paid": body.paid}
+
+@api_router.get("/reconcile")
+async def reconcile(user=Depends(get_current_user)):
+    if user["role"] not in ("company_owner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    q = {} if user["role"] == "admin" else {"poster_id": user["user_id"]}
+    jobs = await db.jobs.find({**q, "status": "completed"}).to_list(3000)
+    now = now_utc()
+    by_cleaner: dict = {}
+    revenue_by_job = []
+    payroll_owed = payroll_paid = revenue_total = revenue_today = 0.0
+    for j in jobs:
+        rev = round(j.get("estimated_duration", 0) * j.get("pay_rate", 0), 2)
+        pay = j.get("logged_pay") or rev
+        paid = bool(j.get("payroll_paid"))
+        revenue_total += rev
+        ca = _aware(j.get("completed_at"))
+        if isinstance(ca, datetime) and ca.date() == now.date():
+            revenue_today += rev
+        revenue_by_job.append({"job_id": j["job_id"], "title": j.get("title"), "client_name": j.get("client_name", ""),
+                               "date": j.get("date"), "completed_at": iso(ca), "revenue": rev, "pay": pay, "paid": paid})
+        if paid:
+            payroll_paid += pay
+        else:
+            payroll_owed += pay
+        for cid in j.get("assigned_cleaners", []):
+            g = by_cleaner.setdefault(cid, {"cleaner_id": cid, "name": "", "avatar": "", "total_owed": 0.0, "total_paid": 0.0, "jobs": []})
+            g["jobs"].append({"job_id": j["job_id"], "title": j.get("title"), "date": j.get("date"),
+                              "hours": j.get("logged_hours", 0), "pay": pay, "paid": paid})
+            g["total_paid" if paid else "total_owed"] += pay
+    for cid, g in by_cleaner.items():
+        c = await db.users.find_one({"user_id": cid})
+        g["name"] = c["name"] if c else "Cleaner"
+        g["avatar"] = c.get("avatar", "") if c else ""
+        g["total_owed"] = round(g["total_owed"], 2)
+        g["total_paid"] = round(g["total_paid"], 2)
+        g["jobs"].sort(key=lambda x: x.get("date") or "", reverse=True)
+    cleaners = sorted(by_cleaner.values(), key=lambda x: x["total_owed"], reverse=True)
+    revenue_by_job.sort(key=lambda x: x.get("completed_at") or "", reverse=True)
+    return {
+        "totals": {"payroll_owed": round(payroll_owed, 2), "payroll_paid": round(payroll_paid, 2),
+                   "revenue_total": round(revenue_total, 2), "revenue_today": round(revenue_today, 2)},
+        "payroll_by_cleaner": cleaners,
+        "revenue_by_job": revenue_by_job,
+    }
 
 @api_router.post("/jobs/{job_id}/addon")
 async def request_addon(job_id: str, body: AddonIn, user=Depends(get_current_user)):
