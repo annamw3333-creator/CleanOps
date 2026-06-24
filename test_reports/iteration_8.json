@@ -1,0 +1,44 @@
+{
+  "summary": "Round-8 testing for AbodeOps: Payment Reconciliation (/api/reconcile + /api/jobs/{id}/mark-paid + /api/metrics payroll_owed gating) and BETA launch pricing (Premium $19.99, Business $39.99). Re-seeded demo data first. Backend: created /app/backend/tests/test_round8_reconcile_beta.py with 11 tests — ALL 11/11 PASSED. Verified: GET /api/reconcile returns the documented shape {totals{payroll_owed,payroll_paid,revenue_total,revenue_today}, payroll_by_cleaner[{cleaner_id,name,total_owed,total_paid,jobs[]}], revenue_by_job[{job_id,title,revenue,pay,paid,...}]}; cleaner role -> 403; Casey Cleaner group present with total_owed>0 and 4 completed jobs; mark-paid 403 for cleaner / 404 for unknown job. End-to-end: as owner pre-flip payroll_owed=$300 and /metrics payroll_owed=$300; POST /api/jobs/demojob_5/mark-paid {paid:true} returned {ok:true,paid:true}; post-flip reconcile totals shifted owed=$210 / paid=$90 and /api/metrics payroll_owed=$210 (drop of exactly $90 = demojob_5 pay 3h*$30). Flipping back to paid:false restored owed=$300. Billing: POST /api/billing/checkout {tier:'pro',redirect_url} and {tier:'business',redirect_url} both return checkout_url (https Stripe URL); invalid tier 'free' -> 422. Source assertion confirms TIER_PRICING = {'pro':1999,'business':3999}. Frontend (mobile viewport 390x844): (1) Owner logs in -> Home -> tapped Command Center card -> /operations -> tapped metric-payroll -> /reconcile?tab=payroll. Summary boxes show $300 Owed to cleaners / $0 Already paid. Casey Cleaner card (testID cleaner-user_52caf676c159) expanded to reveal 4 jobs each with a pay-<jobid> button (pay-demojob_5, pay-demojob_4, pay-job_e9e5f788632e, pay-job_e238bdf9aaa9). Tapped pay-demojob_5 -> button flipped from 'Mark paid' to 'Paid' (paidBtn style), Casey header updated to '$90 paid' + '$210 owed', summary box dropped to $210 Owed / $90 Already paid. (2) Switched to Revenue tab (testID tab-revenue) -> per-job list shows 4 revenue rows (Move-out deep clean $90 Payroll due, Condo refresh $90 Settled, TEST_feedback_job x2 $60 Payroll due each), summary boxes $180 Revenue today / $300 Total revenue. (3) From /operations tapped metric-revenue -> deep-linked /reconcile?tab=revenue with Revenue tab active. (4) /subscription page: beta banner '🚀 Beta launch pricing — locked in for your first 3 months...' visible; Premium card (testID tier-pro) shows '$19.99' /mo with '$49' as struck-through (computed style textDecoration: line-through confirmed) plus 'BETA PRICE' chip; Business card (testID tier-business) shows '$39.99' /mo with '$99' struck-through, 'BETA PRICE' chip AND 'MOST POPULAR' ribbon. Tapped upgrade-pro -> navigated to checkout.stripe.com/c/pay/cs_test_... Stripe Sandbox page displays 'Subscribe to AbodeOps Pro — US$19.99 per month'. Tapped upgrade-business -> Stripe Sandbox page displays 'Subscribe to AbodeOps Business — US$39.99 per month'. BETA pricing flows end-to-end through Stripe checkout sessions. No React Native red screens or new console errors. Only carry-over warnings (shadow* deprecation, expo SDK drift) — same as iter-7.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "Global StyleSheet (carry-over from iter_5/6/7)", "issue": "Console: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Still fires during web bundling. Reference: /app/frontend/src/components/JobMap.tsx:42-44 (pin/person shadow* props) plus shadow* usage in other style files."},
+      {"component": "Expo SDK package versions (carry-over)", "issue": "Expo CLI continues to warn about expo@54.0.34→~54.0.35, expo-font@14.0.11→~14.0.12, expo-router@6.0.23→~6.0.24 SDK drift. Run `npx expo install --check`. Reference: /var/log/supervisor/expo.err.log."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_round8_reconcile_beta.py",
+    "/app/test_reports/pytest/round8_results.xml"
+  ],
+  "action_items": [
+    "(Carry-over) Replace deprecated React Native style props app-wide: shadow* → boxShadow (see JobMap.tsx:42-44).",
+    "(Carry-over) Run `npx expo install --check` and bump expo@54.0.34→54.0.35, expo-font@14.0.11→14.0.12, expo-router@6.0.23→6.0.24.",
+    "(Carry-over from iter_6) POST /api/jobs/{id}/grab still doesn't set cleaner_responses[uid]='accepted', so grab-assigned cleaners still see Accept/Decline first on /job/{id}.",
+    "(Carry-over) /live-map web header overlap on the JobMap.web banner.",
+    "(Carry-over) server.py is now 1348 lines — splitting into routers is overdue."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py L36 TIER_PRICING = {'pro':1999,'business':3999} ✓ matches BETA spec. Make sure the matching Stripe Price/Lookup keys (e.g. abodeops_pro_monthly_1999, abodeops_business_monthly_3999) are configured in the Stripe dashboard — the existing checkout flow used dynamic price_data so it currently works regardless, but if you switch to fixed price IDs the keys must exist.",
+    "/app/backend/server.py L1263-1271 mark-paid: correctly enforces poster/admin authz and toggles payroll_paid + paid_at. Consider also blocking when status != 'completed' so an in-progress job can't be marked paid; today nothing prevents that. Not blocking — reconcile only iterates completed jobs anyway.",
+    "/app/backend/server.py L1273-1316 reconcile: totals math is correct and revenue_by_job is sorted desc by completed_at, payroll_by_cleaner sorted desc by total_owed. payroll_by_cleaner.jobs[].hours uses logged_hours which is 0 for the two TEST_feedback_job seeds → UI shows '0h · $60' which is harmless but a tiny data-quality smell.",
+    "/app/backend/server.py L1273-1316 reconcile does NOT exclude cancelled jobs explicitly — the find() already filters status='completed' so cancelled are excluded by query. Good.",
+    "/app/frontend/app/reconcile.tsx L79-82 'Mark paid' button toggles optimistically by calling load() after mark-paid — works, but a 500 from the API would silently leave the UI unchanged (no error toast). Consider surfacing the err.message inline like subscription.tsx does.",
+    "/app/frontend/app/subscription.tsx L104-111 originalPrice rendering uses textDecoration: line-through (confirmed via computed style). The orig and current prices stack vertically inside the priceTag — looks correct on 390 viewport; would suggest a small horizontal layout test on tablet widths.",
+    "/app/frontend/src/theme.ts L51 BETA_NOTE copy is good. Consider including the absolute prices ('locked-in $19.99 / $39.99 for 3 months') for transparency."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_round8_reconcile_beta.py (created)"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 round-8 tests). /reconcile shape+RBAC, mark-paid authz/404/toggle+metrics drop, billing checkout pro+business BETA pricing, TIER_PRICING constant assertion — all green.",
+    "frontend": "100% on every round-8 flow. metric-payroll/metric-revenue deep-links to /reconcile, cleaner expand → pay-<jobid> toggle (Mark paid → Paid, totals updated $300→$210), tab-revenue per-job list with settled/Payroll due tags, beta banner + $19.99/$49 + $39.99/$99 strikethrough + BETA PRICE chips + MOST POPULAR ribbon, Stripe Sandbox showing US$19.99 / US$39.99 confirming end-to-end BETA pricing."
+  },
+  "seed_data_creation": "Re-ran /app/backend/seed_demo.py at the start of testing to reset payroll_paid flags. Used a paid-then-unpaid round-trip on demojob_5 inside the test to leave state clean. Manual UI test left pay-demojob_5 as Paid — re-seed (`cd /app/backend && python seed_demo.py`) to reset to all-unpaid before re-running the suite.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Round-8 surface area (Reconcile + mark-paid + BETA pricing) is green. Re-seed with `cd /app/backend && python seed_demo.py` to clear payroll_paid flags. Run `pytest tests/test_round8_reconcile_beta.py -v` for the 11-test regression. UI cheat-sheet: owner@abodeops.com / pass123 → tap Command Center card → tap 'Payroll owed' ($300) → /reconcile?tab=payroll → tap Casey Cleaner row to expand → tap pay-demojob_5 to flip a job to Paid. Carry-over items (unchanged from iter-7): shadow*→boxShadow, expo SDK pin bump, grab not auto-accepting, /live-map web banner overlap, server.py size."
+}

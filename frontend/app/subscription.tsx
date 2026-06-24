@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/src/AuthContext";
 import { api } from "@/src/api";
 import { Screen, Header, Button, colors, spacing, radius } from "@/src/components/UI";
-import { SUBSCRIPTION_TIERS } from "@/src/theme";
+import { SUBSCRIPTION_TIERS, BETA_NOTE } from "@/src/theme";
 
 export default function Subscription() {
   const { user, setUser, refresh } = useAuth();
@@ -78,6 +78,7 @@ export default function Subscription() {
           <View style={styles.heroBadge}><Ionicons name="sparkles" size={14} color={colors.gold} /><Text style={styles.heroBadgeText}>AbodeOps Business</Text></View>
           <Text style={styles.heroTitle}>Run your entire cleaning operation</Text>
           <Text style={styles.heroSub}>Live GPS crew tracking, teams, onboarding, payroll previews and messaging — all in one place.</Text>
+          <View style={styles.betaBanner}><Ionicons name="rocket" size={13} color={colors.gold} /><Text style={styles.betaBannerText}>{BETA_NOTE}</Text></View>
         </View>
         {isAdmin && (
           <View style={styles.adminCard}>
@@ -100,8 +101,12 @@ export default function Subscription() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.tierName}>{t.name}</Text>
                   <Text style={styles.tagline}>{t.tagline}</Text>
+                  {t.beta && (
+                    <View style={styles.betaChip}><Ionicons name="rocket-outline" size={11} color={t.accent} /><Text style={[styles.betaChipText, { color: t.accent }]}>BETA PRICE</Text></View>
+                  )}
                 </View>
                 <View style={[styles.priceTag, { backgroundColor: t.accent + "22" }]}>
+                  {t.originalPrice ? <Text style={styles.origPrice}>{t.originalPrice}</Text> : null}
                   <Text style={[styles.price, { color: t.accent }]}>{t.price}</Text>
                   <Text style={styles.period}>{t.period}</Text>
                 </View>
@@ -135,6 +140,11 @@ const styles = StyleSheet.create({
   heroBadgeText: { fontSize: 11.5, fontWeight: "800", color: colors.gold, letterSpacing: 0.3 },
   heroTitle: { fontSize: 22, fontWeight: "800", color: colors.onSurfaceInverse, lineHeight: 28 },
   heroSub: { fontSize: 13.5, color: "#ffffffbb", lineHeight: 19 },
+  betaBanner: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#ffffff12", borderRadius: radius.sm, padding: spacing.sm, marginTop: spacing.xs },
+  betaBannerText: { flex: 1, fontSize: 11.5, color: colors.gold, fontWeight: "600", lineHeight: 16 },
+  betaChip: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 6, backgroundColor: colors.surfaceTertiary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },
+  betaChipText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.4 },
+  origPrice: { fontSize: 12, color: colors.muted, textDecorationLine: "line-through", fontWeight: "700" },
   ribbon: { position: "absolute", top: -1, right: 16, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderBottomLeftRadius: radius.sm, borderBottomRightRadius: radius.sm },
   ribbonText: { fontSize: 10.5, fontWeight: "900", color: colors.onGold, letterSpacing: 0.5 },
   adminCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceInverse, padding: spacing.md, borderRadius: radius.md },

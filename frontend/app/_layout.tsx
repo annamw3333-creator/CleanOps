@@ -42,6 +42,7 @@ export default function RootLayout() {
             <Stack.Screen name="clients" />
             <Stack.Screen name="driver" />
             <Stack.Screen name="live-map" />
+            <Stack.Screen name="reconcile" />
           </Stack>
         </AuthProvider>
       </SafeAreaProvider>

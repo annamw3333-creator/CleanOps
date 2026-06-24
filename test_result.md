@@ -162,7 +162,31 @@ backend:
         -agent: "main"
         -comment: "Curl-verified: POST /jobs/{id}/enroute (sets tracking + shares location), POST /jobs/{id}/location (ping), GET /fleet/live (poster/admin only - 403 for cleaner). Privacy: cleaner_locations stripped from enrich_job so regular /jobs/{id} does NOT leak location; only GET /fleet/live exposes live_cleaners to the poster. Stale (>60min) and completed-phase locations filtered. NOTE: path is /api/fleet/live (NOT /jobs/live which collided with /jobs/{job_id})."
 
-  - task: "Match score, activity feed, metrics, add-ons, premium pricing"
+  - task: "Payment reconciliation (reconcile + mark-paid) & beta pricing"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Curl-verified: GET /reconcile (owner/admin) returns totals {payroll_owed,payroll_paid,revenue_total,revenue_today}, payroll_by_cleaner (grouped w/ jobs+owed+paid), revenue_by_job. POST /jobs/{id}/mark-paid {paid} toggles payroll_paid; /metrics payroll_owed now excludes paid jobs (300->210 after marking one $90 job paid). BETA pricing: TIER_PRICING pro=1999 ($19.99), business=3999 ($39.99); both checkouts return checkout_url with fresh Stripe prices."
+
+frontend:
+  - task: "Reconcile screen + tappable Command Center metrics + beta pricing UI"
+    implemented: true
+    working: "NA"
+    file: "app/reconcile.tsx, app/operations.tsx, app/subscription.tsx, src/theme.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Reconcile screen renders (Payroll/Revenue tabs, summary boxes, empty state confirmed). Command Center 'Revenue today' & 'Payroll owed' metric cards are now tappable -> /reconcile?tab=. Payroll tab: expandable per-cleaner with 'Mark paid' toggle per job. Revenue tab: per-job revenue with settled/due tag. Subscription shows BETA: Premium $19.99 (was $49 struck-through), Business $39.99 (was $99), 'BETA PRICE' chips + beta banner. Needs e2e validation logged in as owner@abodeops.com."
+
     implemented: true
     working: true
     file: "server.py"

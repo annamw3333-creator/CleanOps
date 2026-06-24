@@ -81,8 +81,8 @@ export default function Operations() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
 
         <View style={styles.metricGrid}>
-          <Metric icon="cash-outline" label="Revenue today" value={`$${metrics?.revenue_today ?? 0}`} color={colors.sageDeep} />
-          <Metric icon="wallet-outline" label="Payroll owed" value={`$${metrics?.payroll_owed ?? 0}`} color={colors.gold} />
+          <Metric icon="cash-outline" label="Revenue today" value={`$${metrics?.revenue_today ?? 0}`} color={colors.sageDeep} onPress={() => router.push("/reconcile?tab=revenue")} testID="metric-revenue" />
+          <Metric icon="wallet-outline" label="Payroll owed" value={`$${metrics?.payroll_owed ?? 0}`} color={colors.gold} onPress={() => router.push("/reconcile?tab=payroll")} testID="metric-payroll" />
           <Metric icon="people-outline" label="Active cleaners" value={metrics?.active_cleaners ?? 0} color={colors.brand} />
           <Metric icon="checkmark-done-outline" label="Done today" value={metrics?.completed_today ?? 0} color={colors.success} />
         </View>
@@ -198,15 +198,23 @@ export default function Operations() {
   );
 }
 
-const Metric = ({ icon, label, value, color }: any) => (
-  <View style={styles.metricCard}>
-    <View style={[styles.metricIcon, { backgroundColor: color + "22" }]}>
-      <Ionicons name={icon} size={16} color={color} />
-    </View>
-    <Text style={styles.metricValue} numberOfLines={1}>{value}</Text>
-    <Text style={styles.metricLabel}>{label}</Text>
-  </View>
-);
+const Metric = ({ icon, label, value, color, onPress, testID }: any) => {
+  const content = (
+    <>
+      <View style={[styles.metricIcon, { backgroundColor: color + "22" }]}>
+        <Ionicons name={icon} size={16} color={color} />
+      </View>
+      <Text style={styles.metricValue} numberOfLines={1}>{value}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+        <Text style={styles.metricLabel}>{label}</Text>
+        {onPress ? <Ionicons name="chevron-forward" size={12} color={colors.muted} /> : null}
+      </View>
+    </>
+  );
+  return onPress
+    ? <Pressable onPress={onPress} style={styles.metricCard} testID={testID}>{content}</Pressable>
+    : <View style={styles.metricCard}>{content}</View>;
+};
 const ActionBtn = ({ icon, label, color, onPress, testID }: any) => (
   <Pressable onPress={onPress} style={[styles.action, { borderColor: color }]} testID={testID}>
     <Ionicons name={icon} size={15} color={color} />

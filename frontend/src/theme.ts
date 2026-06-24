@@ -48,6 +48,8 @@ export const QUALIFICATIONS = [
   "5+ Years Experience",
 ];
 
+export const BETA_NOTE = "🚀 Beta launch pricing — locked in for your first 3 months, then reverts to the standard price.";
+
 export const SUBSCRIPTION_TIERS = [
   {
     id: "free",
@@ -58,36 +60,41 @@ export const SUBSCRIPTION_TIERS = [
     features: ["Browse & apply to jobs", "Up to 3 active jobs", "1:1 chat", "Ad-supported"],
     accent: "#A39E93",
     popular: false,
+    beta: false,
   },
   {
     id: "pro",
-    name: "Pro",
-    price: "$19",
-    period: "/month",
-    tagline: "For active cleaners",
+    name: "Premium",
+    price: "$19.99",
+    originalPrice: "$49",
+    period: "/mo",
+    tagline: "Beta Founder · first 3 months",
     features: ["Everything in Free", "Unlimited jobs", "No ads", "Auto-accept jobs", "Driver Mode priority", "Top of applicant lists"],
     accent: "#1A5F7A",
     popular: false,
+    beta: true,
   },
   {
     id: "business",
     name: "Business",
-    price: "$99",
-    period: "/month",
-    tagline: "Run your whole company",
+    price: "$39.99",
+    originalPrice: "$99",
+    period: "/mo",
+    tagline: "All features · beta price",
     features: [
-      "Everything in Pro",
+      "Everything in Premium",
       "Live Crew Map — real-time GPS tracking",
       "Team management & assignments",
       "Onboarding, SOPs & quizzes",
       "Command Center + live ops feed",
-      "Payroll & 2026 tax previews",
+      "Payroll, tax previews & reconciliation",
       "Unlimited team messaging",
       "Client list & feedback links",
       "Priority support",
     ],
     accent: "#D4AF37",
     popular: true,
+    beta: true,
   },
 ];
 
