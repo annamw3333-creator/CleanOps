@@ -33,7 +33,7 @@ EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/
 ADMIN_EMAIL = "aestheticabodesyyc@gmail.com"
 
 stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
-TIER_PRICING = {"pro": 1999, "business": 3999}  # cents / month — BETA launch pricing (first 3 months)
+TIER_PRICING = {"pro": 1900, "business": 1999}  # cents / month — Premium $19; Business $19.99 first month then $99
 _price_cache: dict = {}
 
 async def get_price_id(tier: str) -> str:

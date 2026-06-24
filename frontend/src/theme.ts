@@ -48,7 +48,7 @@ export const QUALIFICATIONS = [
   "5+ Years Experience",
 ];
 
-export const BETA_NOTE = "🚀 Beta launch pricing — locked in for your first 3 months, then reverts to the standard price.";
+export const BETA_NOTE = "🚀 Beta launch: get the full Business plan for just $19.99 your first month, then $99/mo. Cancel anytime.";
 
 export const SUBSCRIPTION_TIERS = [
   {
@@ -65,22 +65,21 @@ export const SUBSCRIPTION_TIERS = [
   {
     id: "pro",
     name: "Premium",
-    price: "$19.99",
-    originalPrice: "$49",
+    price: "$19",
     period: "/mo",
-    tagline: "Beta Founder · first 3 months",
+    tagline: "For active cleaners",
     features: ["Everything in Free", "Unlimited jobs", "No ads", "Auto-accept jobs", "Driver Mode priority", "Top of applicant lists"],
     accent: "#1A5F7A",
     popular: false,
-    beta: true,
+    beta: false,
   },
   {
     id: "business",
     name: "Business",
-    price: "$39.99",
+    price: "$19.99",
     originalPrice: "$99",
-    period: "/mo",
-    tagline: "All features · beta price",
+    period: "first month",
+    tagline: "All features · then $99/mo",
     features: [
       "Everything in Premium",
       "Live Crew Map — real-time GPS tracking",
