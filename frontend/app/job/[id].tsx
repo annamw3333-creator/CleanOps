@@ -111,10 +111,27 @@ export default function JobDetail() {
   const allDone = checklist.length > 0 && checklist.every((i: any) => i.done);
   const myResp = job.cleaner_responses?.[user?.user_id || ""];
   const addToCalendar = async () => {
-    if (Platform.OS === "web") { alert("Calendar sync works on the mobile app."); return; }
+    const start = new Date(`${job.date}T${(job.start_window_from || "09:00")}:00`);
+    const end = new Date(start.getTime() + (job.estimated_duration || 1) * 3600000);
+    if (Platform.OS === "web") {
+      const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      const esc = (s: string) => (s || "").replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
+      const ics = [
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//CleanOps//EN", "CALSCALE:GREGORIAN",
+        "BEGIN:VEVENT", `UID:${job.job_id}@cleanops`, `DTSTAMP:${fmt(new Date())}`,
+        `DTSTART:${fmt(start)}`, `DTEND:${fmt(end)}`,
+        `SUMMARY:${esc("Clean: " + job.title)}`, `LOCATION:${esc(job.address)}`,
+        `DESCRIPTION:${esc(job.manager_notes || "")}`, "END:VEVENT", "END:VCALENDAR",
+      ].join("\r\n");
+      const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `clean-${job.job_id}.ics`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return;
+    }
     try {
-      const start = new Date(`${job.date}T${(job.start_window_from || "09:00")}:00`);
-      const end = new Date(start.getTime() + (job.estimated_duration || 1) * 3600000);
       await Calendar.createEventInCalendarAsync({ title: `Clean: ${job.title}`, location: job.address, startDate: start, endDate: end, notes: job.manager_notes || "" });
     } catch { alert("Could not open calendar."); }
   };

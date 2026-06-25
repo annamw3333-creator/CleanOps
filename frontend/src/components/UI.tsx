@@ -1,7 +1,7 @@
 import React from "react";
 import {
   View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator,
-  ScrollView, ViewStyle, TextStyle,
+  ScrollView, ViewStyle, TextStyle, Platform, useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
@@ -10,9 +10,13 @@ import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, statusColors, statusLabels } from "@/src/theme";
 
 export function Screen({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
+  const { width } = useWindowDimensions();
+  const wide = Platform.OS === "web" && width >= 768;
   return (
-    <SafeAreaView style={[{ flex: 1, backgroundColor: colors.surface }, style]} edges={["top", "left", "right"]}>
-      {children}
+    <SafeAreaView style={[{ flex: 1, backgroundColor: wide ? colors.surfaceTertiary : colors.surface }, style]} edges={["top", "left", "right"]}>
+      {wide ? (
+        <View style={styles.webColumn}>{children}</View>
+      ) : children}
     </SafeAreaView>
   );
 }
@@ -165,6 +169,7 @@ export function RatingLabel({ rating, count, size = 13 }: { rating: number; coun
 export { colors, spacing, radius };
 
 const styles = StyleSheet.create({
+  webColumn: { flex: 1, width: "100%", maxWidth: 760, alignSelf: "center", backgroundColor: colors.surface, borderLeftWidth: 1, borderRightWidth: 1, borderColor: colors.border },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.md },
   backBtn: { marginRight: spacing.sm, width: 32, height: 32, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 24, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 },
