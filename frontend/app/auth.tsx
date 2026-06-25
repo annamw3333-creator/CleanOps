@@ -18,7 +18,7 @@ const ROLES = [
 ];
 
 export default function Auth() {
-  const { login, register, loginWithGoogle } = useAuth();
+  const { login, register, loginWithGoogle, loginAsGuest } = useAuth();
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -43,6 +43,13 @@ export default function Auth() {
     setError(""); setLoading(true);
     try { await loginWithGoogle(role); router.replace("/(tabs)"); }
     catch (e: any) { setError(e.message || "Google sign-in failed"); }
+    finally { setLoading(false); }
+  };
+
+  const guest = async () => {
+    setError(""); setLoading(true);
+    try { await loginAsGuest(); router.replace("/(tabs)"); }
+    catch (e: any) { setError(e.message || "Could not start demo"); }
     finally { setLoading(false); }
   };
 
@@ -101,6 +108,11 @@ export default function Auth() {
           <View style={styles.divider}><View style={styles.line} /><Text style={styles.or}>or</Text><View style={styles.line} /></View>
 
           <Button title="Continue with Google" variant="outline" icon="logo-google" onPress={google} testID="google-signin-button" />
+
+          <Pressable onPress={guest} disabled={loading} style={styles.guestBtn} testID="guest-demo-button">
+            <Ionicons name="eye-outline" size={18} color={colors.brand} />
+            <Text style={styles.guestText}>View Live Demo — no sign-up</Text>
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -129,4 +141,6 @@ const styles = StyleSheet.create({
   divider: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginVertical: spacing.xs },
   line: { flex: 1, height: 1, backgroundColor: colors.border },
   or: { color: colors.muted, fontSize: 13 },
+  guestBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: spacing.md, marginTop: spacing.xs },
+  guestText: { fontSize: 14, fontWeight: "700", color: colors.brand, textDecorationLine: "underline" },
 });

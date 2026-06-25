@@ -30,6 +30,7 @@ type AuthCtx = {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string, role: string) => Promise<void>;
   loginWithGoogle: (role?: string) => Promise<void>;
+  loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   setUser: (u: User) => void;
@@ -96,8 +97,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const loginAsGuest = async () => {
+    const res = await api.post("/auth/guest", {});
+    await setToken(res.token);
+    setUser(res.user);
+  };
+
   return (
-    <Ctx.Provider value={{ user, loading, login, register, loginWithGoogle, logout, refresh, setUser }}>
+    <Ctx.Provider value={{ user, loading, login, register, loginWithGoogle, loginAsGuest, logout, refresh, setUser }}>
       {children}
     </Ctx.Provider>
   );

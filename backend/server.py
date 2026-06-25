@@ -327,6 +327,18 @@ async def google_auth(body: GoogleIn):
     token = await create_session(user_id, data.get("session_token"))
     return {"token": token, "user": with_perks(clean(dict(doc)))}
 
+@api_router.post("/auth/guest")
+async def guest_login():
+    # One-tap demo entry — issues a session for the seeded demo Owner account.
+    user = await db.users.find_one({"email": "owner@abodeops.com"})
+    if not user:
+        user = await db.users.find_one({"role": "company_owner"})
+    if not user:
+        raise HTTPException(status_code=404, detail="Demo account unavailable")
+    user = await ensure_admin(user)
+    token = await create_session(user["user_id"])
+    return {"token": token, "user": with_perks(clean(dict(user)))}
+
 @api_router.get("/auth/me")
 async def me(user=Depends(get_current_user)):
     user = await ensure_admin(user)
