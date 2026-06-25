@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
-import { api, setToken, clearToken, getToken } from "@/src/api";
+import { api, setToken, clearToken, getToken, getGuestFlag, setGuestFlag, clearGuestFlag } from "@/src/api";
 
 type User = {
   user_id: string;
@@ -31,6 +31,7 @@ type AuthCtx = {
   register: (email: string, password: string, name: string, role: string) => Promise<void>;
   loginWithGoogle: (role?: string) => Promise<void>;
   loginAsGuest: () => Promise<void>;
+  isGuest: boolean;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   setUser: (u: User) => void;
@@ -42,16 +43,20 @@ export const useAuth = () => useContext(Ctx);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(false);
 
   const refresh = useCallback(async () => {
     const token = await getToken();
-    if (!token) { setUser(null); setLoading(false); return; }
+    if (!token) { setUser(null); setIsGuest(false); setLoading(false); return; }
     try {
       const res = await api.get("/auth/me");
       setUser(res.user);
+      setIsGuest((await getGuestFlag()) === "1");
     } catch {
       await clearToken();
+      await clearGuestFlag();
       setUser(null);
+      setIsGuest(false);
     } finally {
       setLoading(false);
     }
@@ -62,12 +67,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     const res = await api.post("/auth/login", { email, password });
     await setToken(res.token);
+    await clearGuestFlag();
+    setIsGuest(false);
     setUser(res.user);
   };
 
   const register = async (email: string, password: string, name: string, role: string) => {
     const res = await api.post("/auth/register", { email, password, name, role });
     await setToken(res.token);
+    await clearGuestFlag();
+    setIsGuest(false);
     setUser(res.user);
   };
 
@@ -88,23 +97,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!sessionId) return;
     const res = await api.post("/auth/google", { session_id: sessionId, role });
     await setToken(res.token);
+    await clearGuestFlag();
+    setIsGuest(false);
     setUser(res.user);
   };
 
   const logout = async () => {
     try { await api.post("/auth/logout"); } catch {}
     await clearToken();
+    await clearGuestFlag();
+    setIsGuest(false);
     setUser(null);
   };
 
   const loginAsGuest = async () => {
     const res = await api.post("/auth/guest", {});
     await setToken(res.token);
+    await setGuestFlag();
+    setIsGuest(true);
     setUser(res.user);
   };
 
   return (
-    <Ctx.Provider value={{ user, loading, login, register, loginWithGoogle, loginAsGuest, logout, refresh, setUser }}>
+    <Ctx.Provider value={{ user, loading, login, register, loginWithGoogle, loginAsGuest, isGuest, logout, refresh, setUser }}>
       {children}
     </Ctx.Provider>
   );

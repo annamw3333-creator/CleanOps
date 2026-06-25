@@ -1,12 +1,13 @@
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { LogBox } from "react-native";
+import { LogBox, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/AuthContext";
+import DemoBanner from "@/src/components/DemoBanner";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -26,7 +27,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <Stack screenOptions={{ headerShown: false }}>
+          <View style={{ flex: 1 }}>
+            <DemoBanner />
+            <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="auth" />
             <Stack.Screen name="(tabs)" />
@@ -45,6 +48,7 @@ export default function RootLayout() {
             <Stack.Screen name="reconcile" />
             <Stack.Screen name="availability" />
           </Stack>
+          </View>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

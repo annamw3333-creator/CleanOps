@@ -2,6 +2,7 @@ import { storage } from "@/src/utils/storage";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 const TOKEN_KEY = "aa_token";
+const GUEST_KEY = "aa_guest";
 
 export async function getToken() {
   return storage.secureGet<string>(TOKEN_KEY, "");
@@ -11,6 +12,15 @@ export async function setToken(token: string) {
 }
 export async function clearToken() {
   return storage.secureRemove(TOKEN_KEY);
+}
+export async function getGuestFlag() {
+  return storage.secureGet<string>(GUEST_KEY, "");
+}
+export async function setGuestFlag() {
+  return storage.secureSet(GUEST_KEY, "1");
+}
+export async function clearGuestFlag() {
+  return storage.secureRemove(GUEST_KEY);
 }
 
 async function request(path: string, options: any = {}) {
