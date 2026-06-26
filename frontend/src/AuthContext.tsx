@@ -9,7 +9,7 @@ type User = {
   email: string;
   name: string;
   role: "cleaner" | "company_owner" | "client" | "owner_cleaner" | "admin";
-  tier?: "free" | "pro" | "business";
+  tier?: "free" | "founding" | "professional" | "enterprise";
   ads_enabled?: boolean;
   avatar?: string;
   phone?: string;

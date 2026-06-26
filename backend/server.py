@@ -33,31 +33,46 @@ EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/
 ADMIN_EMAIL = "aestheticabodesyyc@gmail.com"
 
 stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
-TIER_PRICING = {"pro": 1900, "business": 1999}  # cents / month — Premium $19; Business $19.99 first month then $99
+
+import asyncio
+import resend  # Resend transactional email
+resend.api_key = os.environ.get("RESEND_API_KEY", "")
+RESEND_FROM = os.environ.get("RESEND_FROM", "CleanOps <onboarding@resend.dev>")
+
+# Phased pricing (amounts in cents). Checkout charges the FIRST phase price; a Stripe
+# subscription schedule then auto-steps through the remaining phases. months=None => final ongoing phase.
+FOUNDING_LIMIT = 10
+PLANS: dict = {
+    "founding": [(1000, 1), (2999, None)],                 # $10 first month, then $29.99/mo for life
+    "professional": [(1000, 1), (2999, 3), (9900, None)],  # $10 -> $29.99 x3 -> $99/mo
+    "enterprise": [(18900, None)],                         # flat $189/mo
+}
 _price_cache: dict = {}
 
-async def get_price_id(tier: str) -> str:
-    if tier in _price_cache:
-        return _price_cache[tier]
-    amount = TIER_PRICING[tier]
-    lookup = f"abodeops_{tier}_monthly_{amount}"
+async def get_price_id(amount: int) -> str:
+    if amount in _price_cache:
+        return _price_cache[amount]
+    lookup = f"cleanops_monthly_{amount}"
     existing = stripe.Price.list(lookup_keys=[lookup], limit=1)
     if existing.data:
-        _price_cache[tier] = existing.data[0].id
+        _price_cache[amount] = existing.data[0].id
         return existing.data[0].id
-    product = stripe.Product.create(name=f"CleanOps {tier.capitalize()}")
+    product = stripe.Product.create(name=f"CleanOps ${amount/100:.2f}/mo")
     price = stripe.Price.create(
         product=product.id, unit_amount=amount, currency="usd",
         recurring={"interval": "month"}, lookup_key=lookup,
     )
-    _price_cache[tier] = price.id
+    _price_cache[amount] = price.id
     return price.id
 
+async def founding_spots_taken() -> int:
+    return await db.users.count_documents({"founding_member": True})
+
 async def ensure_admin(user: dict) -> dict:
-    if user and user.get("email") == ADMIN_EMAIL and (user.get("role") != "admin" or user.get("tier") != "business"):
-        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"role": "admin", "tier": "business"}})
+    if user and user.get("email") == ADMIN_EMAIL and (user.get("role") != "admin" or user.get("tier") != "enterprise"):
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"role": "admin", "tier": "enterprise"}})
         user["role"] = "admin"
-        user["tier"] = "business"
+        user["tier"] = "enterprise"
     return user
 
 def with_perks(u: dict) -> dict:
@@ -200,7 +215,7 @@ class ProfileIn(BaseModel):
     role: Optional[Literal["cleaner", "company_owner", "client", "owner_cleaner"]] = None
 
 class SubscriptionIn(BaseModel):
-    tier: Literal["free", "pro", "business"]
+    tier: Literal["free", "founding", "professional", "enterprise"]
 
 class JobIn(BaseModel):
     title: str
@@ -350,15 +365,89 @@ async def upgrade_subscription(body: SubscriptionIn, user=Depends(get_current_us
     updated = await db.users.find_one({"user_id": user["user_id"]})
     return {"user": with_perks(clean(dict(updated)))}
 
+# ---------------- Billing helpers ----------------
+async def setup_subscription_schedule(subscription_id: str, tier: str):
+    """After first payment, attach a Stripe subscription schedule that auto-steps prices."""
+    phases_def = PLANS.get(tier) or []
+    if len(phases_def) <= 1 or not subscription_id:
+        return  # flat plan (enterprise) — no schedule needed
+    try:
+        sched = stripe.SubscriptionSchedule.create(from_subscription=subscription_id)
+        phases = []
+        for amount, months in phases_def:
+            pid = await get_price_id(amount)
+            ph = {"items": [{"price": pid, "quantity": 1}], "proration_behavior": "none"}
+            if months is not None:
+                ph["duration"] = {"interval": "month", "interval_count": months}
+            phases.append(ph)
+        stripe.SubscriptionSchedule.modify(sched.id, end_behavior="release", phases=phases)
+    except Exception as e:
+        logger.error(f"subscription schedule setup failed: {e}")
+
+async def send_renewal_reminder(user: dict, starts_on: str) -> bool:
+    if not resend.api_key:
+        return False
+    try:
+        resend.Emails.send({
+            "from": RESEND_FROM,
+            "to": [user["email"]],
+            "subject": "Heads up: your CleanOps Professional rate changes soon",
+            "html": f"""
+              <div style="font-family:Arial,sans-serif;color:#0A192F">
+                <h2>Hi {user.get('name','there')},</h2>
+                <p>Thanks for growing with <b>CleanOps</b>! This is a friendly reminder that your
+                Professional plan moves to the standard <b>$99/month</b> rate starting <b>{starts_on}</b>.</p>
+                <p>No action needed — your unlimited users and every feature stay exactly the same.
+                You can cancel anytime from your profile.</p>
+                <p style="color:#6B7280">— The CleanOps Team</p>
+              </div>
+            """,
+        })
+        return True
+    except Exception as e:
+        logger.error(f"renewal reminder email failed: {e}")
+        return False
+
+async def send_due_reminders():
+    if not resend.api_key:
+        return
+    soon = now_utc() + timedelta(days=7)
+    cursor = db.users.find({
+        "tier": "professional",
+        "renewal_reminder_sent": {"$ne": True},
+        "pro_99_starts_at": {"$lte": soon, "$gte": now_utc()},
+    })
+    async for u in cursor:
+        starts = u.get("pro_99_starts_at")
+        label = starts.strftime("%B %d, %Y") if isinstance(starts, datetime) else "soon"
+        if await send_renewal_reminder(u, label):
+            await db.users.update_one({"user_id": u["user_id"]}, {"$set": {"renewal_reminder_sent": True}})
+
+async def reminder_loop():
+    while True:
+        try:
+            await send_due_reminders()
+        except Exception as e:
+            logger.error(f"reminder_loop error: {e}")
+        await asyncio.sleep(6 * 3600)
+
 class CheckoutIn(BaseModel):
-    tier: Literal["pro", "business"]
+    tier: Literal["founding", "professional", "enterprise"]
     redirect_url: str
+
+@api_router.get("/billing/founding-status")
+async def founding_status():
+    taken = await founding_spots_taken()
+    return {"taken": taken, "limit": FOUNDING_LIMIT, "spots_left": max(0, FOUNDING_LIMIT - taken)}
 
 @api_router.post("/billing/checkout")
 async def create_checkout(body: CheckoutIn, user=Depends(get_current_user)):
     if not stripe.api_key:
         raise HTTPException(status_code=503, detail="Billing not configured")
-    price_id = await get_price_id(body.tier)
+    if body.tier == "founding" and await founding_spots_taken() >= FOUNDING_LIMIT:
+        raise HTTPException(status_code=409, detail="Founding Partner spots are all claimed")
+    intro_amount = PLANS[body.tier][0][0]
+    price_id = await get_price_id(intro_amount)
     session = stripe.checkout.Session.create(
         mode="subscription",
         line_items=[{"price": price_id, "quantity": 1}],
@@ -372,7 +461,7 @@ async def create_checkout(body: CheckoutIn, user=Depends(get_current_user)):
         {"stripe_session_id": session.id},
         {"$setOnInsert": {
             "stripe_session_id": session.id, "user_id": user["user_id"],
-            "tier": body.tier, "amount": TIER_PRICING[body.tier], "currency": "usd",
+            "tier": body.tier, "amount": intro_amount, "currency": "usd",
             "status": "pending", "created_at": now_utc(),
         }},
         upsert=True,
@@ -395,7 +484,15 @@ async def billing_status(session_id: str, user=Depends(get_current_user)):
             {"$set": {"status": "paid", "subscription_id": s.subscription, "updated_at": now_utc()}},
         )
         if tier:
-            await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"tier": tier}})
+            updates: dict = {"tier": tier}
+            if tier == "founding":
+                updates["founding_member"] = True
+            if tier == "professional":
+                # $99 rate begins after month 1 ($10) + months 2-4 ($29.99) ≈ 4 months in
+                updates["pro_99_starts_at"] = now_utc() + timedelta(days=120)
+                updates["renewal_reminder_sent"] = False
+            await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})
+            await setup_subscription_schedule(s.subscription, tier)
     updated = await db.users.find_one({"user_id": user["user_id"]})
     return {"payment_status": s.payment_status, "paid": paid, "user": with_perks(clean(dict(updated)))}
 
@@ -1391,6 +1488,7 @@ async def startup():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("user_id", unique=True)
     await db.user_sessions.create_index("session_token", unique=True)
+    asyncio.create_task(reminder_loop())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

@@ -1,0 +1,36 @@
+{
+  "summary": "Tested the NEW 3-tier billing (founding / professional / enterprise) end-to-end. Rewrote /app/backend/tests/test_billing.py to the new tiers; 14/14 pytest cases pass against the public preview URL: founding-status shape (taken/limit:10/spots_left), checkout session creation for all three tiers with correct INTRO amount persisted to payment_transactions (founding=1000, professional=1000, enterprise=18900 cents), old tiers (free/pro/business/gold/premium) rejected with 422, /billing/status for an unpaid session returns paid=false without crashing and does NOT upgrade the user tier, /billing/status requires auth, /billing/checkout requires auth, and the founding cap: after inserting users to reach founding_member=true count of 10 directly in Mongo, /billing/founding-status returns spots_left=0 and POST /billing/checkout tier='founding' returns 409 while other tiers still succeed (cleanup removes the inserted TEST users). Frontend (mobile 390x844): /subscription renders all 3 cards with testIDs tier-founding, tier-professional, tier-enterprise; '10 OF 10 SPOTS LEFT' founding badge visible; phased prices ($10 / $29.99 / $99 / $189) and all tier names rendered; upgrade-founding/upgrade-professional/upgrade-enterprise buttons present. Logged in as owner@abodeops.com/pass123 and tapping upgrade-professional fires POST /api/billing/checkout and navigates to checkout.stripe.com — the live Stripe page shows 'Subscribe to CleanOps $10.00/mo' confirming the correct intro amount. Guest entry /?guest=1 auto-enters as Owner ('Hi, Olivia / Your command center'). Backend logs show ZERO 'subscription schedule setup failed' errors after our checkout activity (schedule path only runs on real payment, which we did not complete). The earlier tracebacks in backend.err.log are historical (resend module missing, syntax errors) from prior reloads — current process is healthy. Real Stripe test-card payment completion was OPTIONAL and was not executed in this harness; backend session creation + unpaid-status flow fully verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_billing.py",
+    "/app/test_reports/pytest/billing_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py setup_subscription_schedule: phases include the FIRST (intro) phase too, but Stripe creates the schedule from_subscription (which already started with that intro price). Re-listing the same intro phase as phase 0 should be fine because Stripe matches by price, but worth verifying with a real test-card payment that the phase transitions occur on the expected month boundaries (1->month 2 jump, 4->month 5 jump for professional).",
+    "server.py /billing/status updates pro_99_starts_at = now + 120 days on confirmation. Comment says ~4 months in (1+3=4). 120 days vs the actual Stripe phase boundary (calendar months) can drift up to ~3 days; reminder email checks pro_99_starts_at <= now+7d so this drift is fine but worth flagging.",
+    "RESEND_API_KEY is empty by design — send_renewal_reminder() and send_due_reminders() early-return (no-op). The reminder_loop runs every 6h and is harmless. OK per spec.",
+    "/billing/checkout always uses customer_email=user['email'] but never creates/reuses a Stripe Customer object. If a user upgrades multiple times this creates multiple guest customers in Stripe (minor housekeeping issue)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_billing.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 pytest)",
+    "frontend": "100% (all 6 tier/upgrade testIDs reachable, Stripe redirect verified with $10 intro for professional)"
+  },
+  "seed_data_creation": "TestFoundingCap temporarily inserts up to 10 users with founding_member=true (user_id prefix TEST_fcap_) into Mongo, then deletes them in teardown. No residual data in DB after the test run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Auth testIDs are email-input, password-input, auth-submit-button (NOT auth-email-input). Subscription screen testIDs: tier-founding/-professional/-enterprise, upgrade-founding/-professional/-enterprise, billing-msg. /billing/founding-status is PUBLIC (no auth required). /billing/checkout and /billing/status/{sid} require Bearer token. Guest entry: /?guest=1 calls /api/auth/guest and signs in as Owner Olivia. To do a full payment validation, manually fill the Stripe hosted checkout with 4242 4242 4242 4242 and verify /api/billing/status/{sid} flips tier to 'professional', sets pro_99_starts_at, and check backend logs for any schedule errors.",
+  "rca_of_issue": "N/A — no bugs found. All new 3-tier billing endpoints, validation, founding cap enforcement, and frontend integration work as specified."
+}

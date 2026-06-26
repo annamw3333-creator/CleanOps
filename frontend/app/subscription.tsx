@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/src/AuthContext";
 import { api } from "@/src/api";
 import { Screen, Header, Button, colors, spacing, radius } from "@/src/components/UI";
-import { SUBSCRIPTION_TIERS, BETA_NOTE } from "@/src/theme";
+import { SUBSCRIPTION_TIERS, BETA_NOTE, CORE_PROMISE } from "@/src/theme";
 
 export default function Subscription() {
   const { user, setUser, refresh } = useAuth();
@@ -17,6 +17,8 @@ export default function Subscription() {
   const [msg, setMsg] = useState("");
   const current = user?.tier || "free";
   const isAdmin = user?.role === "admin";
+  const [foundingLeft, setFoundingLeft] = useState<number | null>(null);
+  useEffect(() => { api.get("/billing/founding-status").then((r) => setFoundingLeft(r.spots_left)).catch(() => {}); }, []);
 
   // On web, Stripe redirects back here with ?session_id=...; confirm it.
   useEffect(() => {
@@ -35,12 +37,6 @@ export default function Subscription() {
       await new Promise((r) => setTimeout(r, 1500));
     }
     setMsg("Payment still processing. Pull to refresh shortly.");
-  };
-
-  const downgrade = async () => {
-    setBusy("free");
-    try { const res = await api.post("/subscription/upgrade", { tier: "free" }); setUser(res.user); }
-    catch {} finally { setBusy(""); }
   };
 
   const checkout = async (tier: string) => {
@@ -68,14 +64,14 @@ export default function Subscription() {
     finally { setBusy(""); }
   };
 
-  const onSelect = (tier: string) => { if (tier === "free") downgrade(); else checkout(tier); };
+  const onSelect = (tier: string) => checkout(tier);
 
   return (
     <Screen>
       <Header title="Subscription" subtitle="Choose the plan that fits you" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing["3xl"], gap: spacing.lg }}>
         <View style={styles.hero}>
-          <View style={styles.heroBadge}><Ionicons name="sparkles" size={14} color={colors.gold} /><Text style={styles.heroBadgeText}>CleanOps Business</Text></View>
+          <View style={styles.heroBadge}><Ionicons name="sparkles" size={14} color={colors.gold} /><Text style={styles.heroBadgeText}>SIMPLE, HONEST PRICING</Text></View>
           <Text style={styles.heroTitle}>Run your entire cleaning operation</Text>
           <Text style={styles.heroSub}>Live GPS crew tracking, teams, onboarding, payroll previews and messaging — all in one place.</Text>
           <View style={styles.betaBanner}><Ionicons name="rocket" size={13} color={colors.gold} /><Text style={styles.betaBannerText}>{BETA_NOTE}</Text></View>
@@ -122,15 +118,25 @@ export default function Subscription() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.tierName}>{t.name}</Text>
                   <Text style={styles.tagline}>{t.tagline}</Text>
-                  {t.beta && (
-                    <View style={styles.betaChip}><Ionicons name="rocket-outline" size={11} color={t.accent} /><Text style={[styles.betaChipText, { color: t.accent }]}>BETA PRICE</Text></View>
+                  {(t as any).limited && foundingLeft != null && (
+                    <View style={[styles.betaChip, { backgroundColor: foundingLeft > 0 ? colors.sage : colors.surfaceTertiary }]}>
+                      <Ionicons name="flame" size={11} color={t.accent} />
+                      <Text style={[styles.betaChipText, { color: t.accent }]}>{foundingLeft > 0 ? `${foundingLeft} OF 10 SPOTS LEFT` : "ALL SPOTS CLAIMED"}</Text>
+                    </View>
                   )}
                 </View>
                 <View style={[styles.priceTag, { backgroundColor: t.accent + "22" }]}>
-                  {t.originalPrice ? <Text style={styles.origPrice}>{t.originalPrice}</Text> : null}
                   <Text style={[styles.price, { color: t.accent }]}>{t.price}</Text>
                   <Text style={styles.period}>{t.period}</Text>
                 </View>
+              </View>
+              <View style={styles.steps}>
+                {((t as any).steps || []).map((s: string, i: number) => (
+                  <View key={s} style={styles.stepRow}>
+                    <Text style={[styles.stepArrow, { color: t.accent }]}>{i === 0 ? "→" : "•"}</Text>
+                    <Text style={styles.stepText}>{s}</Text>
+                  </View>
+                ))}
               </View>
               <View style={{ gap: spacing.sm, marginVertical: spacing.md }}>
                 {t.features.map((f) => (
@@ -143,12 +149,14 @@ export default function Subscription() {
               {active ? (
                 <View style={styles.currentBadge}><Ionicons name="checkmark" size={16} color={colors.success} /><Text style={styles.currentText}>Current plan</Text></View>
               ) : (
-                <Button title={t.id === "free" ? "Downgrade to Free" : `Upgrade to ${t.name}`} onPress={() => onSelect(t.id)} loading={busy === t.id}
+                <Button title={(t as any).limited && foundingLeft === 0 ? "Sold Out" : `Choose ${t.name}`} onPress={() => onSelect(t.id)} loading={busy === t.id}
+                  disabled={(t as any).limited && foundingLeft === 0}
                   variant={t.popular ? "secondary" : "primary"} testID={`upgrade-${t.id}`} />
               )}
             </View>
           );
         })}
+        <Text style={styles.promise}>{CORE_PROMISE}</Text>
         <Text style={styles.note}>Cancel anytime · Secure checkout by Stripe (test mode). Use card 4242 4242 4242 4242.</Text>
       </ScrollView>
     </Screen>
@@ -188,6 +196,11 @@ const styles = StyleSheet.create({
   period: { fontSize: 11, color: colors.muted },
   feature: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   featureText: { fontSize: 14, color: colors.onSurface },
+  steps: { gap: 5, backgroundColor: colors.surfaceTertiary, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
+  stepRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  stepArrow: { fontSize: 14, fontWeight: "900", width: 14, textAlign: "center" },
+  stepText: { fontSize: 13.5, fontWeight: "700", color: colors.onSurface, flex: 1 },
+  promise: { fontSize: 12.5, color: colors.onSurface, textAlign: "center", fontWeight: "700", lineHeight: 18 },
   currentBadge: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12 },
   currentText: { color: colors.success, fontWeight: "700" },
   note: { fontSize: 12, color: colors.muted, textAlign: "center" },
