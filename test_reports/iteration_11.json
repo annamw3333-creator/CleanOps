@@ -1,0 +1,41 @@
+{
+  "summary": "REGRESSION SMOKE TEST for JobMap.tsx native rewrite (Leaflet inside react-native-webview, no Google Maps key). Mobile viewport 390x844. As noted in the request, Metro serves JobMap.web.tsx on the web preview, so we could not exercise the native WebView+Leaflet code path here — this run confirms the rewrite did NOT break bundling or any map-hosting screen. ALL 6 acceptance items pass with 0 console errors and 0 page errors across 8 navigations. (1) App bundles cleanly — Metro logged 'Web Bundled' with 1368-1370 modules and no error stack; no red screen; no runtime errors. (2) /(tabs)/map renders the web Leaflet map: data-testid='job-map' present, data-testid='map-view-toggle' present, .leaflet-container in DOM, OpenStreetMap tiles visible with job markers; List/Map toggle flips between Leaflet view and JobMapFallback list view. (3) /live-map renders: data-testid='live-back' present, 'Live Crew Map' title rendered, legend chips 'On the way' / 'On site' / 'Pending job' / 'In progress' all rendered, data-testid='job-map' (Leaflet OSM) present, 'No crew sharing location' empty-state card shown (expected). (4) /?guest=1 auto-enters as Owner — 'Demo Mode' banner + 'Hi, Olivia / Your command center' visible, command center cards (Create Job, Command Center, Live Crew Map, Client List, Pay & Tax Calculator) all render. (5) /subscription renders all 3 tier cards — data-testid='tier-founding', data-testid='tier-professional', data-testid='tier-enterprise' all present; founding banner '10 OF 10 SPOTS LEFT' and intro prices visible. (6) Login at /auth with owner@abodeops.com / pass123 succeeds — form testIDs email-input/password-input/auth-submit-button all reachable, submit lands on '/' with 'Hi, Olivia' command center; post-login navigation to /(tabs)/map and /live-map both still render Leaflet + testIDs correctly. Conclusion: native JobMap.tsx rewrite (WebView+Leaflet, no Google key) introduced NO web/bundling regressions. The native map itself must be verified by the user in a fresh APK build.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/tmp/01_guest_home.png",
+    "/tmp/02_map_tab.png",
+    "/tmp/02b_map_list.png",
+    "/tmp/03_live_map.png",
+    "/tmp/04_sub.png",
+    "/tmp/auth_page.png",
+    "/tmp/post_login.png",
+    "/tmp/auth_map.png",
+    "/tmp/auth_live.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "JobMap.tsx (native) loads Leaflet from unpkg CDN inside the WebView. On a real device with no/poor network on first map open, the map will render a grey background until the CDN responds. Consider bundling leaflet.css/leaflet.js as local assets (or pre-warm) for offline robustness; functionally fine for now.",
+    "JobMap.tsx html template injects ${region.latitude/longitude} directly into the HTML string. Values come from server-controlled job/people coordinates — low risk, but if a future code path passes user-typed values into 'region', it would be an HTML/JS injection vector. Treat region as numeric-only or JSON.stringify it.",
+    "JobMap.tsx — useRef(region).current snapshot means the initial center never updates if the parent re-renders with a different region (e.g., live-map switching from default Calgary to first-job lat/lng after /fleet/live resolves). Markers re-fit via fitBounds inside updateMarkers, so this is OK in practice; just a heads-up if a screen ever depends on changing the initial center without changing markers.",
+    "Expo CLI warns about minor version drift (expo 54.0.34 vs ~54.0.35, expo-font 14.0.11 vs ~14.0.12, expo-router 6.0.23 vs ~6.0.24). Non-blocking but worth bumping in a future maintenance pass."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only review)",
+    "frontend": "100% (6/6 regression items, 0 console/page errors)"
+  },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login route is /auth (single screen with Sign In / Register tabs); testIDs are email-input, password-input, auth-submit-button. After successful sign-in the app redirects to '/' (owner command center). On web preview Metro resolves JobMap.web.tsx (real Leaflet div + List/Map toggle), so anything testing the native WebView code in JobMap.tsx must be done in a native build — it cannot be exercised through Playwright/Expo web. Map tab path is /(tabs)/map. /live-map is its own route. /subscription tier testIDs: tier-founding, tier-professional, tier-enterprise.",
+  "rca_of_issue": "N/A — pure regression pass; the native crash RCA was the prior Google Maps API key requirement of react-native-maps. The rewrite replaces react-native-maps with react-native-webview rendering Leaflet/OSM HTML, eliminating the Google key dependency. Verified the web path is unaffected; native APK validation belongs to the user."
+}
