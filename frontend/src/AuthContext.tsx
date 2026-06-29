@@ -10,6 +10,8 @@ type User = {
   name: string;
   role: "cleaner" | "company_owner" | "client" | "owner_cleaner" | "admin";
   tier?: "free" | "founding" | "professional" | "enterprise";
+  account_origin?: "independent" | "employer";
+  employer_id?: string;
   ads_enabled?: boolean;
   avatar?: string;
   phone?: string;

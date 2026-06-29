@@ -68,6 +68,16 @@ async def get_price_id(amount: int) -> str:
 async def founding_spots_taken() -> int:
     return await db.users.count_documents({"founding_member": True})
 
+# Marketplace visibility caps for INDEPENDENT cleaners (None = unlimited).
+CLEANER_JOB_CAPS = {"free": 5, "founding": 25, "professional": 50, "enterprise": None}
+
+def is_employer_cleaner(user: dict) -> bool:
+    """A cleaner whose login was created by an employer — locked to that employer's jobs."""
+    return user.get("account_origin") == "employer" and bool(user.get("employer_id"))
+
+def job_cap(user: dict):
+    return CLEANER_JOB_CAPS.get(user.get("tier", "free"), 5)
+
 async def ensure_admin(user: dict) -> dict:
     if user and user.get("email") == ADMIN_EMAIL and (user.get("role") != "admin" or user.get("tier") != "enterprise"):
         await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"role": "admin", "tier": "enterprise"}})
@@ -319,6 +329,7 @@ async def register(body: RegisterIn):
         "qualifications": [], "hourly_rate": 0, "auto_accept": False,
         "experience_summary": "", "portfolio": [], "availability": [],
         "tier": "free",
+        "account_origin": "independent",
         "created_at": now_utc(),
     }
     await db.users.insert_one(doc)
@@ -356,6 +367,7 @@ async def google_auth(body: GoogleIn):
             "qualifications": [], "hourly_rate": 0, "auto_accept": False,
             "experience_summary": "", "portfolio": [], "availability": [],
             "tier": "free",
+            "account_origin": "independent",
             "created_at": now_utc(),
         }
         await db.users.insert_one(doc)
@@ -676,6 +688,8 @@ async def list_jobs(scope: str = "available", status: Optional[str] = None, user
         # jobs that are pending and not yet assigned; cleaners see ones they qualify for
         q["status"] = "pending"
         q["assigned_cleaners"] = {"$size": 0}
+        if is_employer_cleaner(user):
+            q["poster_id"] = user["employer_id"]  # employer-onboarded cleaners only see their employer's jobs
     if status:
         q["status"] = status
     jobs = await db.jobs.find(q).sort("created_at", -1).to_list(300)
@@ -692,6 +706,10 @@ async def list_jobs(scope: str = "available", status: Optional[str] = None, user
             ej["fits_availability"] = ok
             ej["fit_reason"] = reason
         result.append(ej)
+    if scope == "available" and user["role"] in ("cleaner", "owner_cleaner") and not is_employer_cleaner(user):
+        cap = job_cap(user)  # independent cleaners see a tier-limited slice of the marketplace
+        if cap is not None:
+            result = result[:cap]
     return result
 
 @api_router.get("/jobs/{job_id}")
@@ -699,6 +717,8 @@ async def get_job(job_id: str, user=Depends(get_current_user)):
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if is_employer_cleaner(user) and job.get("poster_id") != user["employer_id"] and user["user_id"] not in job.get("assigned_cleaners", []):
+        raise HTTPException(status_code=403, detail="This job isn't available to you")
     enriched = await enrich_job(job)
     # attach applicant info
     apps = []
@@ -728,6 +748,8 @@ async def apply_job(job_id: str, user=Depends(get_current_user)):
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if is_employer_cleaner(user) and job.get("poster_id") != user["employer_id"]:
+        raise HTTPException(status_code=403, detail="You can only take jobs posted by your employer")
     ok, reason = availability_fit(user, job)
     if not ok:
         raise HTTPException(status_code=400, detail=f"You're {reason}. Update your availability to take this job.")
@@ -908,6 +930,35 @@ async def add_member(team_id: str, body: TeamMemberIn, user=Depends(get_current_
         raise HTTPException(status_code=403, detail="Not authorized")
     await db.teams.update_one({"team_id": team_id}, {"$addToSet": {"members": body.cleaner_id}})
     return {"ok": True}
+
+class CreateCleanerIn(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    team_id: Optional[str] = None
+
+@api_router.post("/teams/create-cleaner")
+async def create_cleaner(body: CreateCleanerIn, user=Depends(get_current_user)):
+    """Employer creates a cleaner login. The cleaner is locked to this employer's jobs."""
+    if user["role"] not in ("company_owner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=403, detail="Only business owners can add cleaners")
+    if await db.users.find_one({"email": body.email.lower()}):
+        raise HTTPException(status_code=409, detail="That email is already registered")
+    cid = f"user_{uuid.uuid4().hex[:12]}"
+    doc = {
+        "user_id": cid, "email": body.email.lower(), "name": body.name, "role": "cleaner",
+        "password_hash": hash_password(body.password),
+        "phone": "", "bio": "", "avatar": "",
+        "qualifications": [], "hourly_rate": 0, "auto_accept": False,
+        "experience_summary": "", "portfolio": [], "availability": [],
+        "tier": "free", "account_origin": "employer", "employer_id": user["user_id"],
+        "created_at": now_utc(),
+    }
+    await db.users.insert_one(doc)
+    if body.team_id:
+        await db.teams.update_one({"team_id": body.team_id, "owner_id": user["user_id"]},
+                                  {"$addToSet": {"members": cid}})
+    return {"user_id": cid, "name": body.name, "email": body.email.lower(), "role": "cleaner", "account_origin": "employer"}
 
 # ---------------- Chat ----------------
 @api_router.get("/conversations")
@@ -1266,7 +1317,8 @@ async def driver_offers(lat: Optional[float] = None, lng: Optional[float] = None
         raise HTTPException(status_code=403, detail="Driver mode is for cleaners")
     clat = lat if lat is not None else user.get("last_lat")
     clng = lng if lng is not None else user.get("last_lng")
-    jobs = await db.jobs.find({"status": "pending", "assigned_cleaners": {"$size": 0}}).sort("created_at", -1).to_list(300)
+    jobs = await db.jobs.find({"status": "pending", "assigned_cleaners": {"$size": 0},
+                               **({"poster_id": user["employer_id"]} if is_employer_cleaner(user) else {})}).sort("created_at", -1).to_list(300)
     mine_quals = set(user.get("qualifications", []))
     offers = []
     for j in jobs:
@@ -1291,7 +1343,9 @@ async def driver_offers(lat: Optional[float] = None, lng: Optional[float] = None
         ej["est_earnings"] = round(j.get("estimated_duration", 0) * j.get("pay_rate", 0), 2)
         offers.append(ej)
     offers.sort(key=lambda x: (x["distance_km"] is None, x["distance_km"] if x["distance_km"] is not None else 0))
-    return offers[:limit]
+    cap = None if is_employer_cleaner(user) else job_cap(user)
+    end = limit if cap is None else min(limit, cap)
+    return offers[:end]
 
 @api_router.post("/driver/decline/{job_id}")
 async def driver_decline(job_id: str, user=Depends(get_current_user)):
@@ -1307,6 +1361,8 @@ async def grab_job(job_id: str, user=Depends(get_current_user)):
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if is_employer_cleaner(user) and job.get("poster_id") != user["employer_id"]:
+        raise HTTPException(status_code=403, detail="You can only take jobs posted by your employer")
     if job.get("assigned_cleaners"):
         raise HTTPException(status_code=409, detail="This job was just taken by another cleaner")
     req = set(job.get("required_qualifications", []))

@@ -13,12 +13,14 @@ export default function Jobs() {
   const canBid = user?.role === "cleaner" || user?.role === "owner_cleaner" || user?.role === "admin";
   const canPost = user?.role !== "cleaner";
   const isCleaner = user?.role === "cleaner";
+  const isEmployerCleaner = user?.account_origin === "employer";
+  const tier = user?.tier || "free";
   const [tab, setTab] = useState(canBid ? "available" : "mine");
   const [jobs, setJobs] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const tabs = [
-    ...(canBid ? [{ k: "available", l: "Available" }, { k: "assigned", l: "My Work" }] : []),
+    ...(canBid ? [{ k: "available", l: isEmployerCleaner ? "Company Jobs" : "Available" }, { k: "assigned", l: "My Work" }] : []),
     ...(canPost ? [{ k: "mine", l: "Posted" }] : []),
   ];
 
@@ -72,6 +74,14 @@ export default function Jobs() {
             )}
           </View>
         )) : jobs.map((j) => <JobRow key={j.job_id} job={j} onPress={() => router.push(`/job/${j.job_id}`)} />)}
+        {isCleaner && !isEmployerCleaner && tier === "free" && tab === "available" && jobs.length >= 5 ? (
+          <Card style={{ alignItems: "center", gap: spacing.sm }} testID="marketplace-upsell">
+            <Ionicons name="lock-closed" size={22} color={colors.gold} />
+            <Text style={styles.upsellTitle}>You're seeing 5 of many jobs</Text>
+            <Text style={styles.upsellSub}>Subscribe to unlock the full marketplace and Driver Mode.</Text>
+            <Button title="See plans" icon="sparkles" onPress={() => router.push("/subscription")} testID="upsell-subscribe" />
+          </Card>
+        ) : null}
       </ScrollView>
     </Screen>
   );
@@ -81,4 +91,6 @@ const styles = StyleSheet.create({
   outsideRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   outsideBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.warning + "1A", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.warning + "55" },
   outsideText: { fontSize: 12, fontWeight: "700", color: colors.warning },
+  upsellTitle: { fontSize: 16, fontWeight: "800", color: colors.onSurface, textAlign: "center" },
+  upsellSub: { fontSize: 13, color: colors.muted, textAlign: "center" },
 });

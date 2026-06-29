@@ -1,0 +1,42 @@
+{
+  "summary": "Tested CleanOps marketplace access-control feature end-to-end. Backend: 12/12 pytest assertions PASS — POST /api/teams/create-cleaner sets account_origin='employer' + employer_id; non-owner gets 403; duplicate email gets 409; employer cleaner sees ONLY employer's jobs in /api/jobs?scope=available and /api/driver/offers; GET/apply/grab on a non-employer job all return 403; independent free cleaner is capped at 5 jobs and 5 driver offers; owner's scope=mine unaffected; owner/cleaner/guest login regression all green. Frontend: Teams create-cleaner flow works (open-create-cleaner -> cc-name/cc-email/cc-pass -> cc-submit -> cc-done with credentials visible); independent free cleaner sees Jobs Available tab with exactly 5 jobs and the marketplace-upsell card + upsell-subscribe button that navigates to /subscription. Minor ordering issue in apply/grab handlers (profile-completeness 400 runs before employer-block 403) — security still enforced but contract differs from spec when profile is incomplete.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/jobs/{id}/apply, POST /api/jobs/{id}/grab", "issue": "Profile-completeness check (400) runs BEFORE the employer-cleaner non-employer-job check (403). An employer cleaner with incomplete profile attempting a non-employer job receives 400 'Complete your profile' instead of 403 'You can only take jobs posted by your employer'. Security is still enforced (request is blocked) but contract & user message are misleading. Reorder: do is_employer_cleaner+poster_id check immediately after fetching the job, before the profile-completeness gate."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "Console warnings", "issue": "Deprecation warnings on web: \"shadow*\" style props are deprecated (use boxShadow) and props.pointerEvents is deprecated (use style.pointerEvents). Not blocking; should be cleaned up."},
+      {"component": "Expo SDK packages", "issue": "Expo CLI reports packages should be updated for SDK 54: expo@54.0.34→54.0.35, expo-font@14.0.11→14.0.12, expo-router@6.0.23→6.0.24. Reference: /var/log/supervisor/expo.err.log"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_marketplace_access.py",
+    "/app/test_reports/pytest/marketplace_access_results.xml"
+  ],
+  "action_items": [
+    "(Optional) In server.py apply_job() and grab_job(), move the `is_employer_cleaner(user) and job.poster_id != user.employer_id` check to BEFORE the profile-completeness `experience_summary/portfolio/availability` check so the response is 403 (employer block) instead of 400 (profile incomplete) for non-employer jobs.",
+    "(Optional housekeeping) Replace deprecated React Native Web style props: 'shadow*' -> 'boxShadow', and component.props.pointerEvents -> style.pointerEvents.",
+    "(Optional) Bump Expo SDK packages to versions Expo CLI suggests (expo 54.0.35, expo-font 14.0.12, expo-router 6.0.24).",
+    "(Optional code review) server.py is monolithic (~1400+ lines). Consider splitting into routers (auth, jobs, teams, driver, billing, etc.) for maintainability."
+  ],
+  "critical_code_review_comments": [
+    "server.py exceeds 700-line guideline — split into multiple FastAPI routers/modules.",
+    "Order of guard clauses in apply_job/grab_job leaks profile-incomplete 400 to employer cleaners hitting non-employer jobs (contract issue, not a security hole).",
+    "list_jobs cap is applied AFTER full enrichment of all matching docs — fine at current scale, but for large marketplaces consider applying cap before enrichment to save DB roundtrips."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_marketplace_access.py (new file)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (all targeted flows verified)"},
+  "seed_data_creation": "Test users TEST_cc_* and TEST_owner_* and one test job titled TEST_non_employer_job are created during test runs. The job-creation test deletes the created job at the end of the test. Leftover TEST_* users from prior runs are harmless.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/test_marketplace_access.py -v` for the marketplace regression. UI tests covered: owner Teams -> Add Member -> Create New Cleaner Login -> credentials shown -> Done; cleaner Jobs Available tab -> 5 jobs visible + marketplace-upsell card -> upsell-subscribe navigates to /subscription. Use bottom tab role='tab' name='Jobs' to navigate after cleaner login (default landing for cleaner is Driver Mode/Home). For the apply/grab 403 test to actually return 403, the employer cleaner must have a complete profile (experience_summary, 10+ portfolio photos, ≥1 availability day) — otherwise 400 is returned first (see backend minor issue).",
+  "rca_of_issue": "N/A — feature works as specified. The only oddity is the guard-clause ordering in apply_job/grab_job which returns 400 (profile incomplete) before the spec'd 403 when the employer cleaner has not completed their profile yet. Recommended one-line reorder in server.py around lines 744–752 and 1359–1365: move the is_employer_cleaner+poster_id != employer_id check immediately after `job = await db.jobs.find_one(...)` and before the profile-completeness check."
+}

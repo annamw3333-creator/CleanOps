@@ -14,6 +14,13 @@ export default function Teams() {
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [addTo, setAddTo] = useState<string | null>(null);
+  const [ccOpen, setCcOpen] = useState(false);
+  const [ccName, setCcName] = useState("");
+  const [ccEmail, setCcEmail] = useState("");
+  const [ccPass, setCcPass] = useState("");
+  const [ccBusy, setCcBusy] = useState(false);
+  const [ccDone, setCcDone] = useState<any>(null);
+  const [ccErr, setCcErr] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -34,6 +41,18 @@ export default function Teams() {
 
   const addMember = async (teamId: string, cleanerId: string) => {
     try { await api.post(`/teams/${teamId}/members`, { cleaner_id: cleanerId }); setAddTo(null); await load(); } catch {}
+  };
+
+  const createCleaner = async () => {
+    if (!ccName.trim() || !ccEmail.trim() || ccPass.length < 6) { setCcErr("Enter name, email, and a 6+ character password."); return; }
+    setCcBusy(true); setCcErr("");
+    try {
+      await api.post("/teams/create-cleaner", { name: ccName.trim(), email: ccEmail.trim(), password: ccPass, team_id: addTo });
+      setCcDone({ email: ccEmail.trim(), password: ccPass });
+      setCcName(""); setCcEmail(""); setCcPass("");
+      await load();
+    } catch (e: any) { setCcErr(e.message || "Could not create cleaner"); }
+    finally { setCcBusy(false); }
   };
 
   return (
@@ -93,6 +112,9 @@ export default function Teams() {
               <Pressable onPress={() => setAddTo(null)} hitSlop={10}><Ionicons name="close" size={24} color={colors.onSurface} /></Pressable>
             </View>
             <ScrollView contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.xl }}>
+              <Button title="Create New Cleaner Login" variant="outline" icon="person-add"
+                onPress={() => { setCcOpen(true); setCcDone(null); setCcErr(""); }} testID="open-create-cleaner" />
+              <Text style={[styles.hint, { marginTop: spacing.sm }]}>Or add an existing cleaner who already signed up:</Text>
               {cleaners.length === 0 && <Text style={styles.hint}>No cleaners available yet.</Text>}
               {cleaners.map((c) => (
                 <Pressable key={c.user_id} onPress={() => addTo && addMember(addTo, c.user_id)} style={styles.member} testID={`pick-${c.user_id}`}>
@@ -105,6 +127,41 @@ export default function Teams() {
                 </Pressable>
               ))}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Create cleaner login modal */}
+      <Modal visible={ccOpen} transparent animationType="slide" onRequestClose={() => setCcOpen(false)}>
+        <View style={styles.modalBg}>
+          <View style={styles.modal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>New Cleaner Login</Text>
+              <Pressable onPress={() => { setCcOpen(false); setCcDone(null); }} hitSlop={10}><Ionicons name="close" size={24} color={colors.onSurface} /></Pressable>
+            </View>
+            {ccDone ? (
+              <View style={{ gap: spacing.sm }}>
+                <Text style={styles.successTitle}>✅ Cleaner added!</Text>
+                <Text style={styles.hint}>Share these login details with your cleaner:</Text>
+                <View style={styles.credBox}>
+                  <Text style={styles.credText}>Email: {ccDone.email}</Text>
+                  <Text style={styles.credText}>Password: {ccDone.password}</Text>
+                </View>
+                <Text style={styles.note2}>They'll only see jobs your company posts — never the open marketplace.</Text>
+                <Button title="Done" onPress={() => { setCcOpen(false); setCcDone(null); setAddTo(null); }} testID="cc-done" />
+              </View>
+            ) : (
+              <View>
+                <Input label="Full Name" value={ccName} onChangeText={setCcName} placeholder="Jordan Cleaner" testID="cc-name" />
+                <View style={{ height: spacing.sm }} />
+                <Input label="Email" value={ccEmail} onChangeText={setCcEmail} placeholder="jordan@email.com" autoCapitalize="none" keyboardType="email-address" testID="cc-email" />
+                <View style={{ height: spacing.sm }} />
+                <Input label="Temporary Password" value={ccPass} onChangeText={setCcPass} placeholder="At least 6 characters" secureTextEntry testID="cc-pass" />
+                {ccErr ? <Text style={styles.err}>{ccErr}</Text> : null}
+                <View style={{ height: spacing.md }} />
+                <Button title="Create Cleaner Login" onPress={createCleaner} loading={ccBusy} testID="cc-submit" />
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -124,4 +181,9 @@ const styles = StyleSheet.create({
   modal: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, paddingBottom: spacing["2xl"], maxHeight: "80%" },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg },
   modalTitle: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
+  successTitle: { fontSize: 18, fontWeight: "800", color: colors.onSurface },
+  credBox: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, gap: 4 },
+  credText: { fontSize: 15, fontWeight: "700", color: colors.onSurface },
+  note2: { fontSize: 12.5, color: colors.muted, lineHeight: 18 },
+  err: { color: colors.danger, fontSize: 13, marginTop: spacing.sm },
 });
