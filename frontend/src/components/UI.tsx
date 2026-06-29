@@ -7,7 +7,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { colors, spacing, radius, statusColors, statusLabels } from "@/src/theme";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { colors, spacing, radius, shadows, iconSizes, statusColors, statusLabels } from "@/src/theme";
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export function Screen({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   const { width } = useWindowDimensions();
@@ -50,7 +53,7 @@ export function Button({ title, onPress, variant = "primary", loading, disabled,
   const handle = () => { if (!disabled && !loading) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onPress(); } };
   return (
     <Pressable onPress={handle} disabled={disabled || loading} testID={testID}
-      style={[styles.btn, { backgroundColor: bg }, border, (disabled || loading) && { opacity: 0.5 }, style]}>
+      style={({ pressed }: any) => [styles.btn, { backgroundColor: bg }, border, pressed && styles.pressedBtn, (disabled || loading) && { opacity: 0.5 }, style]}>
       {loading ? <ActivityIndicator color={fg} /> : (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {icon && <Ionicons name={icon} size={18} color={fg} />}
@@ -62,8 +65,15 @@ export function Button({ title, onPress, variant = "primary", loading, disabled,
 }
 
 export function Card({ children, style, onPress, testID }: { children: React.ReactNode; style?: ViewStyle; onPress?: () => void; testID?: string }) {
-  const Comp: any = onPress ? Pressable : View;
-  return <Comp onPress={onPress} testID={testID} style={[styles.card, style]}>{children}</Comp>;
+  if (onPress) {
+    return (
+      <AnimatedPressable entering={FadeIn.duration(220)} onPress={onPress} testID={testID}
+        style={({ pressed }: any) => [styles.card, shadows.card, pressed && styles.cardPressed, style]}>
+        {children}
+      </AnimatedPressable>
+    );
+  }
+  return <Animated.View entering={FadeIn.duration(220)} testID={testID} style={[styles.card, shadows.card, style]}>{children}</Animated.View>;
 }
 
 export function Input({ value, onChangeText, placeholder, secureTextEntry, keyboardType, multiline, label, autoCapitalize, testID }: any) {
@@ -104,7 +114,7 @@ export function EmptyState({ icon, title, subtitle, actionLabel, onAction, testI
   return (
     <View style={styles.empty}>
       <View style={styles.emptyIconOuter}>
-        <View style={styles.emptyIcon}><Ionicons name={icon} size={30} color={colors.brand} /></View>
+        <View style={styles.emptyIcon}><Ionicons name={icon} size={iconSizes.empty} color={colors.brand} /></View>
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       {subtitle ? <Text style={styles.emptySub}>{subtitle}</Text> : null}
@@ -175,8 +185,10 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 24, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 },
   headerSubtitle: { fontSize: 13, color: colors.muted, marginTop: 2 },
   btn: { height: 52, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.lg },
+  pressedBtn: { transform: [{ scale: 0.97 }], opacity: 0.92 },
   btnText: { fontSize: 16, fontWeight: "700" },
-  card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
+  card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: 18, borderWidth: 1, borderColor: colors.divider },
+  cardPressed: { transform: [{ scale: 0.985 }], opacity: 0.96 },
   inputLabel: { fontSize: 13, fontWeight: "600", color: colors.onSurface },
   input: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, height: 50, fontSize: 15, color: colors.onSurface },
   pill: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill, borderWidth: 1, alignSelf: "flex-start" },

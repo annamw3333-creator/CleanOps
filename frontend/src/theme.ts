@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 export const colors = {
   surface: "#F8F7F4",
   onSurface: "#0A192F",
@@ -37,6 +39,21 @@ export const statusLabels = {
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, "2xl": 32, "3xl": 48 };
 export const radius = { sm: 6, md: 12, lg: 20, pill: 999 };
+
+// Soft, Linear/Stripe-style elevation (boxShadow on web/RN 0.81, native shadow elsewhere).
+export const shadows = {
+  card: Platform.select({
+    web: { boxShadow: "0px 4px 18px rgba(10,25,47,0.05), 0px 1px 3px rgba(10,25,47,0.03)" } as any,
+    default: { shadowColor: "#0A192F", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 14, elevation: 3 },
+  }),
+  floating: Platform.select({
+    web: { boxShadow: "0px 8px 28px rgba(10,25,47,0.10)" } as any,
+    default: { shadowColor: "#0A192F", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 22, elevation: 8 },
+  }),
+};
+
+// Standardized icon sizing — keep these consistent everywhere.
+export const iconSizes = { inline: 16, nav: 24, hero: 24, empty: 44 };
 
 export const QUALIFICATIONS = [
   "Background Checked",
