@@ -10,8 +10,6 @@ import * as Haptics from "expo-haptics";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { colors, spacing, radius, shadows, iconSizes, statusColors, statusLabels } from "@/src/theme";
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 export function Screen({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   const { width } = useWindowDimensions();
   const wide = Platform.OS === "web" && width >= 768;
@@ -67,10 +65,10 @@ export function Button({ title, onPress, variant = "primary", loading, disabled,
 export function Card({ children, style, onPress, testID }: { children: React.ReactNode; style?: ViewStyle; onPress?: () => void; testID?: string }) {
   if (onPress) {
     return (
-      <AnimatedPressable entering={FadeIn.duration(220)} onPress={onPress} testID={testID}
+      <Pressable onPress={onPress} testID={testID}
         style={({ pressed }: any) => [styles.card, shadows.card, pressed && styles.cardPressed, style]}>
         {children}
-      </AnimatedPressable>
+      </Pressable>
     );
   }
   return <Animated.View entering={FadeIn.duration(220)} testID={testID} style={[styles.card, shadows.card, style]}>{children}</Animated.View>;

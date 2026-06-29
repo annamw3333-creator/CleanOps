@@ -1,0 +1,26 @@
+{
+  "summary": "FIX VERIFIED — pressable Card chrome regression is FULLY RESOLVED. Re-tested across all previously-broken pressable cards on owner, cleaner, and guest sessions. Every pressable Card now renders with the correct backgroundColor (default white #FFFFFF or per-card override like operations-card rgb(10,25,47), live-map-card rgb(26,95,122) sage, driver-card rgb(43,112,67) sageDeep, manage-subscription rgb(10,25,47)), 18px padding, soft boxShadow (rgba(10,25,47,0.05) 0 4px 18px) and proper border. onPress navigation continues to work on every card. Button press-scale still works. Login flows (owner@abodeops.com/pass123, cleaner@abodeops.com/pass123, /?guest=1) all succeed. Major screens (Home command center, Work Hub + job detail, Operations metrics+feed, Teams, Subscription 3 tiers, Profile, Live Crew Map, Clients) all render without crash or blank. NO regressions introduced by the Card refactor.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Subscription", "issues": ["tier-founding / tier-professional / tier-enterprise cards have boxShadow: 'none' (they appear to be a custom subscription tier component, not the shared Card). They still have correct backgrounds, padding 16px, and proper border (gold 2px on founding tier for selected state). Not a regression from this fix — flagging as minor visual inconsistency vs other shadow-elevated cards across the app for the main agent to decide."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "OPTIONAL: consider adding shadows.card to subscription tier cards (/app/frontend/app/subscription.tsx tier-* cards) for consistency with the rest of the app's elevated card aesthetic. Not blocking."
+  ],
+  "critical_code_review_comments": [
+    "Card fix in UI.tsx is clean: onPress branch uses plain Pressable with function-form style (styles.card + shadows.card + pressed-scale + caller's style override), and non-onPress branch keeps Animated.View entering={FadeIn}. This is the correct pattern — function-form style only works on Pressable directly, not on Animated.createAnimatedComponent(Pressable)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only retest)", "frontend": "100% — all 16 pressable card testIDs verified across 6 screens with correct bg/padding/shadow; all 3 login flows pass; all major screens render with no crashes"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Card visual polish regression is fully resolved as of iteration_14. Verified computed styles via getComputedStyle in browser on: operations-card (bg rgb(10,25,47), padding 18px, boxShadow present), onboarding-card, live-map-card (sage rgb(26,95,122)), clients-card, payroll-card, manage-subscription (dark), subscription-card, teams-card, driver-card (sageDeep rgb(43,112,67) on cleaner login), availability-card, job-card-demojob_1/2/3 — every one of them has 18px padding and the standard soft shadow rgba(10,25,47,0.05) 0px 4px 18px. Owner login → tap operations-card → Command Center loads with metric-revenue, metric-payroll, feed-* cards, ops-job-* rows. Work Hub tab → job-card-* renders correctly → tap navigates to job detail. Profile → manage-subscription navigates to Subscription with tier-founding/professional/enterprise (note: tier cards intentionally have no shadow, custom component). Teams → 3-member crew renders. Cleaner login → Driver Mode green card visible. Guest mode (/?guest=1) → 'Demo Mode — you're exploring CleanOps' banner shows, all cards render. Ignore RN-Web shadow* deprecation warnings (non-blocking, pre-existing).",
+  "rca_of_issue": "Original regression (iteration_13): Animated.createAnimatedComponent(Pressable) returns a wrapper that does not invoke Pressable's function-form `style={({pressed}) => [...]}` prop, so the entire returned style array (styles.card bg/padding/border + shadows.card + cardPressed scale + caller's style override) was silently dropped, causing every pressable Card to render with bg=transparent / padding=0 / boxShadow=none. Fix applied (iteration_14): UI.tsx Card now branches — onPress variant uses a plain Pressable with function-form style intact; non-pressable variant uses Animated.View with FadeIn entering animation. Function-form style now resolves correctly. Verified via getComputedStyle: operations-card → backgroundColor 'rgb(10, 25, 47)', padding '18px', boxShadow 'rgba(10, 25, 47, 0.05) 0px 4px 18px 0px, rgba(10, 25, 47, 0.03) 0px 1px 3px 0px'."
+}
