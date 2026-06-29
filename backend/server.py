@@ -743,13 +743,13 @@ async def get_job(job_id: str, user=Depends(get_current_user)):
 async def apply_job(job_id: str, user=Depends(get_current_user)):
     if user["role"] not in ("cleaner", "owner_cleaner", "admin"):
         raise HTTPException(status_code=403, detail="Only cleaners can apply")
-    if user["role"] in ("cleaner", "owner_cleaner") and not (user.get("experience_summary") and len(user.get("portfolio", [])) >= 10 and len(user.get("availability", [])) >= 1):
-        raise HTTPException(status_code=400, detail="Complete your profile: add an experience summary, at least 10 work photos, and your availability before applying")
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if is_employer_cleaner(user) and job.get("poster_id") != user["employer_id"]:
         raise HTTPException(status_code=403, detail="You can only take jobs posted by your employer")
+    if user["role"] in ("cleaner", "owner_cleaner") and not (user.get("experience_summary") and len(user.get("portfolio", [])) >= 10 and len(user.get("availability", [])) >= 1):
+        raise HTTPException(status_code=400, detail="Complete your profile: add an experience summary, at least 10 work photos, and your availability before applying")
     ok, reason = availability_fit(user, job)
     if not ok:
         raise HTTPException(status_code=400, detail=f"You're {reason}. Update your availability to take this job.")
@@ -1356,13 +1356,13 @@ async def driver_decline(job_id: str, user=Depends(get_current_user)):
 async def grab_job(job_id: str, user=Depends(get_current_user)):
     if user["role"] not in ("cleaner", "owner_cleaner", "admin"):
         raise HTTPException(status_code=403, detail="Only cleaners can accept jobs")
-    if user["role"] in ("cleaner", "owner_cleaner") and not (user.get("experience_summary") and len(user.get("portfolio", [])) >= 10 and len(user.get("availability", [])) >= 1):
-        raise HTTPException(status_code=400, detail="Complete your profile (experience, 10+ photos, availability) before accepting jobs")
     job = await db.jobs.find_one({"job_id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if is_employer_cleaner(user) and job.get("poster_id") != user["employer_id"]:
         raise HTTPException(status_code=403, detail="You can only take jobs posted by your employer")
+    if user["role"] in ("cleaner", "owner_cleaner") and not (user.get("experience_summary") and len(user.get("portfolio", [])) >= 10 and len(user.get("availability", [])) >= 1):
+        raise HTTPException(status_code=400, detail="Complete your profile (experience, 10+ photos, availability) before accepting jobs")
     if job.get("assigned_cleaners"):
         raise HTTPException(status_code=409, detail="This job was just taken by another cleaner")
     req = set(job.get("required_qualifications", []))
