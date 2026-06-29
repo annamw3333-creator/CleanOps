@@ -121,6 +121,27 @@ def availability_fit(user: dict, job: dict):
 async def completed_count(cid: str) -> int:
     return await db.jobs.count_documents({"assigned_cleaners": cid, "status": "completed"})
 
+async def completed_counts(ids: list) -> dict:
+    """Batch version of completed_count — one aggregation for many cleaner ids."""
+    ids = list({i for i in ids if i})
+    if not ids:
+        return {}
+    rows = await db.jobs.aggregate([
+        {"$match": {"assigned_cleaners": {"$in": ids}, "status": "completed"}},
+        {"$unwind": "$assigned_cleaners"},
+        {"$match": {"assigned_cleaners": {"$in": ids}}},
+        {"$group": {"_id": "$assigned_cleaners", "count": {"$sum": 1}}},
+    ]).to_list(len(ids) + 10)
+    return {r["_id"]: r["count"] for r in rows}
+
+async def users_map(ids: list) -> dict:
+    """Fetch many users in a single $in query, keyed by user_id."""
+    ids = list({i for i in ids if i})
+    if not ids:
+        return {}
+    docs = await db.users.find({"user_id": {"$in": ids}}).to_list(len(ids) + 10)
+    return {u["user_id"]: u for u in docs}
+
 # ---------------- Helpers ----------------
 def now_utc():
     return datetime.now(timezone.utc)
@@ -525,11 +546,11 @@ async def geocode(address: str, user=Depends(get_current_user)):
 @api_router.get("/users")
 async def list_users(user=Depends(get_current_user)):
     users = await db.users.find({"user_id": {"$ne": user["user_id"]}}).to_list(200)
+    counts = await completed_counts([u["user_id"] for u in users if u["role"] in ("cleaner", "owner_cleaner")])
     result = []
     for u in users:
-        cc = await completed_count(u["user_id"]) if u["role"] in ("cleaner", "owner_cleaner") else 0
         result.append({"user_id": u["user_id"], "name": u["name"], "role": u["role"], "avatar": u.get("avatar", ""),
-                       "completed_count": cc})
+                       "completed_count": counts.get(u["user_id"], 0)})
     return result
 
 @api_router.get("/users/{user_id}")
@@ -571,12 +592,15 @@ async def payroll_calculate(body: PayrollIn, user=Depends(get_current_user)):
 async def enrich_job(job: dict):
     job = clean(dict(job))
     job.pop("cleaner_locations", None)  # live locations are private; exposed only via /fleet/live to the poster
+    cids = job.get("assigned_cleaners", [])
+    umap = await users_map(cids)
+    counts = await completed_counts(cids)
     assigned = []
-    for cid in job.get("assigned_cleaners", []):
-        c = await db.users.find_one({"user_id": cid})
+    for cid in cids:
+        c = umap.get(cid)
         if c:
             assigned.append({"user_id": c["user_id"], "name": c["name"], "avatar": c.get("avatar", ""),
-                             "completed_count": await completed_count(c["user_id"])})
+                             "completed_count": counts.get(cid, 0)})
     job["assigned_cleaners_info"] = assigned
     return job
 
@@ -867,13 +891,11 @@ async def create_team(body: TeamIn, user=Depends(get_current_user)):
 @api_router.get("/teams/mine")
 async def my_teams(user=Depends(get_current_user)):
     teams = await db.teams.find({"$or": [{"owner_id": user["user_id"]}, {"members": user["user_id"]}]}).to_list(100)
+    umap = await users_map([mid for t in teams for mid in t.get("members", [])])
     result = []
     for t in teams:
-        members = []
-        for mid in t.get("members", []):
-            c = await db.users.find_one({"user_id": mid})
-            if c:
-                members.append({"user_id": c["user_id"], "name": c["name"], "avatar": c.get("avatar", "")})
+        members = [{"user_id": c["user_id"], "name": c["name"], "avatar": c.get("avatar", "")}
+                   for mid in t.get("members", []) if (c := umap.get(mid))]
         tc = clean(dict(t))
         tc["members_info"] = members
         result.append(tc)
@@ -891,10 +913,11 @@ async def add_member(team_id: str, body: TeamMemberIn, user=Depends(get_current_
 @api_router.get("/conversations")
 async def list_conversations(user=Depends(get_current_user)):
     convos = await db.conversations.find({"participants": user["user_id"]}).sort("updated_at", -1).to_list(100)
+    umap = await users_map([next((p for p in c["participants"] if p != user["user_id"]), None) for c in convos])
     result = []
     for c in convos:
         other_id = next((p for p in c["participants"] if p != user["user_id"]), None)
-        other = await db.users.find_one({"user_id": other_id}) if other_id else None
+        other = umap.get(other_id) if other_id else None
         cc = clean(dict(c))
         cc["other"] = {"user_id": other["user_id"], "name": other["name"], "avatar": other.get("avatar", "")} if other else None
         result.append(cc)
