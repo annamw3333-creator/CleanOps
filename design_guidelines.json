@@ -1,101 +1,87 @@
 {
-  "app_name": "Auto Abodes",
-  "personality": "1 iOS-Native Clean",
-  "personality_one_liner": "A highly functional, premium-feeling service marketplace that balances command-center utility with consumer-grade polish and trust.",
+  "app_name": "CleanOps",
+  "personality": "1 iOS-Native Clean (Premium B2B SaaS variant - Stripe/Linear vibe)",
+  "personality_one_liner": "A premium, high-trust operations center that feels as precise and polished as the top-tier cleaning services it manages.",
   "color": {
-    "light": {
-      "surface": "#F8F7F4",
-      "onSurface": "#0A192F",
-      "surfaceSecondary": "#FFFFFF",
-      "onSurfaceSecondary": "#0A192F",
-      "surfaceTertiary": "#EAE7DF",
-      "onSurfaceTertiary": "#0A192F",
-      "surfaceInverse": "#0A192F",
-      "onSurfaceInverse": "#F8F7F4",
-      "brand": "#1A5F7A",
-      "brandPrimary": "#1A5F7A",
-      "onBrandPrimary": "#FFFFFF",
-      "brandSecondary": "#D4AF37",
-      "onBrandSecondary": "#0A192F",
-      "brandTertiary": "#C1D7C2",
-      "onBrandTertiary": "#0A192F",
-      "success": "#2B7043",
-      "onSuccess": "#FFFFFF",
-      "warning": "#D4AF37",
-      "onWarning": "#0A192F",
-      "error": "#D64045",
-      "onError": "#FFFFFF",
-      "border": "#D5D0C4",
-      "borderStrong": "#A39E93",
-      "divider": "#EAE7DF"
-    },
-    "dark": {
-      "surface": "#060E1A",
-      "onSurface": "#F8F7F4",
-      "surfaceSecondary": "#0A192F",
-      "onSurfaceSecondary": "#F8F7F4",
-      "surfaceTertiary": "#12243D",
-      "onSurfaceTertiary": "#F8F7F4",
-      "surfaceInverse": "#F8F7F4",
-      "onSurfaceInverse": "#0A192F",
-      "brand": "#2D8AA9",
-      "brandPrimary": "#2D8AA9",
-      "onBrandPrimary": "#060E1A",
-      "brandSecondary": "#E1C05B",
-      "onBrandSecondary": "#060E1A",
-      "brandTertiary": "#253A2A",
-      "onBrandTertiary": "#C1D7C2",
-      "success": "#44A86A",
-      "onSuccess": "#060E1A",
-      "warning": "#E1C05B",
-      "onWarning": "#060E1A",
-      "error": "#E85D61",
-      "onError": "#060E1A",
-      "border": "#1A2C42",
-      "borderStrong": "#2D4560",
-      "divider": "#12243D"
-    }
+    "surface": "#F8F7F4",
+    "onSurface": "#0A192F",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#0A192F",
+    "surfaceTertiary": "#F1EFE9",
+    "onSurfaceTertiary": "#0A192F",
+    "surfaceInverse": "#0A192F",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#1A5F7A",
+    "brandPrimary": "#1A5F7A",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#D4AF37",
+    "onBrandSecondary": "#0A192F",
+    "brandTertiary": "#E4EEF2",
+    "onBrandTertiary": "#1A5F7A",
+    "success": "#4CAF50",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F5A623",
+    "onWarning": "#FFFFFF",
+    "error": "#D0021B",
+    "onError": "#FFFFFF",
+    "info": "#4A90E2",
+    "onInfo": "#FFFFFF",
+    "border": "rgba(10, 25, 47, 0.08)",
+    "borderStrong": "rgba(10, 25, 47, 0.15)",
+    "divider": "rgba(10, 25, 47, 0.06)"
   },
   "typography": {
-    "displayFontFamily": "Plus Jakarta Sans",
-    "textFontFamily": "Plus Jakarta Sans",
+    "displayFontFamily": "Inter",
+    "textFontFamily": "Inter",
     "scale": {
-      "sm": 12,
-      "base": 14,
-      "lg": 16,
-      "xl": 20,
-      "2xl": 24
-    }
+      "sm": 13,
+      "base": 15,
+      "lg": 17,
+      "xl": 22,
+      "2xl": 28
+    },
+    "guidance": "Max weight 500. Use 17px/400 for highly readable body text (Linear standard). Use slightly negative tracking for 2xl display text to match Stripe's premium feel."
   },
   "spacing": {
-    "rule": "Generous spacing. Use safe areas at all root components. Thumb-friendly touch targets (min 44pt). Form inputs and cards need comfortable internal padding.",
-    "xs": 4,
-    "sm": 8,
-    "md": 12,
-    "lg": 16,
-    "xl": 24,
-    "2xl": 32,
+    "rule": "Linear/Stripe 8pt scale with generous card padding. Avoid dense clustering.",
+    "xs": 8,
+    "sm": 12,
+    "md": 16,
+    "lg": 24,
+    "xl": 32,
+    "2xl": 40,
     "3xl": 48
   },
   "radius_tokens": {
-    "sm": 6,
+    "sm": 8,
     "md": 12,
-    "lg": 20,
-    "pill": 999
+    "lg": 16,
+    "pill": 999,
+    "guidance": "md (12px) is the standard for all cards. sm (8px) for small buttons/inputs."
   },
   "shadow_tier": 1,
+  "shadow_specs": {
+    "web": "0px 4px 16px rgba(10, 25, 47, 0.04), 0px 1px 2px rgba(10, 25, 47, 0.02)",
+    "native": "shadowColor: '#0A192F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2"
+  },
   "navigation": "bottom_tabs",
-  "icon_set": "Phosphor",
+  "icon_set": "Ionicons",
+  "icon_sizing": {
+    "inline": 16,
+    "nav_bar": 24,
+    "card_hero": 24,
+    "empty_state": 48
+  },
   "glassmorphism": {
     "enabled": true,
     "do's": [
-      "Use glass for bottom tab bars when content scrolls behind",
-      "Use glass for floating action buttons or map filters overlay",
-      "Use glass for sticky header rows in the map view"
+      "Use for the sticky Driver Mode active offer banner",
+      "Use for bottom tab bar background to prevent hard cut-offs",
+      "Use for the sticky bottom action bar on Job Details"
     ],
     "dont's": [
-      "Do not use glass on dense data dashboard cards",
-      "Do not use glass for text input fields"
+      "Do not use on standard feed cards or metric tiles",
+      "Do not use on forms or dense data tables"
     ]
   },
   "platform_libraries": {
@@ -110,91 +96,59 @@
     "animation": "react-native-reanimated",
     "gesture": "react-native-gesture-handler"
   },
-  "haptics": {
-    "events": {
-      "tab_press": "light",
-      "job_check_in": "medium",
-      "photo_capture": "success",
-      "job_complete": "success",
-      "status_filter_toggle": "selection"
-    }
-  },
   "screens": [
     {
-      "name": "Role Selection / Auth",
-      "purpose": "Securely authenticate and route users based on role (Cleaner, Owner, Client).",
+      "name": "Jobs Marketplace Feed",
+      "purpose": "Discover and grab available cleaning jobs quickly.",
       "states": {
-        "loading": "Spinner centered.",
-        "empty": "N/A",
-        "error": "Standard alert toast or banner."
+        "loading": "Skeleton cards mimicking exact layout, sliding shimmer effect.",
+        "empty": "Illustration of a clipboard/map, 'No jobs in your area', 'Check back later or expand your radius.', Button: 'Update Preferences'",
+        "error": "Cannot load jobs. 'Retry Connection' CTA."
       },
-      "layout": "Hero image taking top 40% with top-down gradient scrim. Brand logo. Clean stacked buttons for Google SignIn and Email Auth. Minimalist and trustworthy."
+      "layout": "Reduce text density on cards: Remove labels (e.g., instead of 'Date: Oct 12', just show 'Oct 12' in bolder text next to a calendar icon). 1 primary price metric right-aligned. Use spacing.lg (24px) for internal card padding."
     },
     {
-      "name": "Live Map (Owner & Cleaner)",
-      "purpose": "A hardware-accelerated 60fps map displaying assigned/available jobs as color-coded status pins (Red, Yellow, Green).",
+      "name": "Operations Command Center",
+      "purpose": "High-level overview of metrics and live crew activity.",
       "states": {
-        "loading": "Map skeleton or blurred map tile with spinner.",
-        "empty": "Map centers on current location with 'No active jobs' floating pill.",
-        "error": "Error banner at top."
+        "loading": "Metric tiles skeleton with faint pulse.",
+        "empty": "Illustration of an operations desk. 'Your command center is ready.', 'Invite your first employee to see live stats.', Button: 'Invite Team Member'",
+        "error": "Failed to fetch metrics. 'Refresh Data' CTA."
       },
-      "layout": "Full screen map taking 80% space. Floating top bar for filters (Date, Status). Bottom sheet for 'Up Next' or selected pin quick-card peek. Tapping a pin highlights it and peeks a card without a full screen change."
+      "layout": "2-column grid for metrics (gap: 16px). Only 1 primary number per card (28px), 1 comparison metric (13px, secondary color). No heavy text explanations. Live activity feed uses infinite scroll below metrics."
     },
     {
-      "name": "Dashboard (Cleaner / Owner / Client)",
-      "purpose": "Role-specific command center: Cleaners see schedule/earnings, Owners see teams/jobs, Clients review cleaners.",
+      "name": "Job Detail",
+      "purpose": "Deep dive into a specific job and process its workflow.",
       "states": {
-        "loading": "Skeleton cards.",
-        "empty": "Illustration + 'No upcoming jobs. Post a job or find one.'",
-        "error": "Error message with retry button."
+        "loading": "Skeleton rows mimicking job metadata.",
+        "empty": "Not applicable (detail screen).",
+        "error": "Job not found or removed. 'Back to Jobs' CTA."
       },
-      "layout": "Vertical scroll. 'Today's Agenda' stacked cards. Use 'surfaceSecondary' for cards. Primary CTA ('Post Job' or 'Accept Job') is sticky at the bottom."
-    },
-    {
-      "name": "Job Detail & Checklist",
-      "purpose": "Detailed work scope, notes, and the mandatory check-in/photo capture flow for standard/deep/airbnb cleans.",
-      "states": {
-        "loading": "Skeleton view.",
-        "empty": "N/A",
-        "error": "Retry fetching job details."
-      },
-      "layout": "Top section: Address, Time window, Notes. Mid section: Sticky segmented control (Info | Checklist). Checklist view has oversized photo placeholder buttons. Sticky 'Complete Job' CTA at bottom disabled until photos are captured."
-    },
-    {
-      "name": "Chat (1:1 & Team)",
-      "purpose": "In-app messaging to coordinate between owners, clients, and cleaners.",
-      "states": {
-        "loading": "Spinner.",
-        "empty": "'No messages yet. Say hi!'",
-        "error": "Connection error banner."
-      },
-      "layout": "Standard chat interface. Input fixed to keyboard avoiding view. Avatar photos for users."
+      "layout": "Sticky primary action button anchored at the bottom with a glass background. Group metadata into visual blocks (Location, Client, Checklist) separated by subtle dividers (1px divider, not cards inside cards)."
     }
   ],
+  "animations": {
+    "guidance": "Subtle, Stripe-like transitions. Everything should feel instant but smooth.",
+    "list_entrance": "react-native-reanimated FadeInUp with 300ms duration, subtle spring.",
+    "press_scale": "Scale down to 0.97 on press (buttons and cards).",
+    "skeleton": "Smooth, slow opacity pulse (not aggressive left-to-right shimmers)."
+  },
   "images": {
-    "auth_hero": {
-      "url": "https://images.unsplash.com/photo-1759722668087-efcc63c91ed2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzJ8MHwxfHNlYXJjaHwxfHxjbGVhbiUyMG1vZGVybiUyMGFwYXJ0bWVudCUyMGxpdmluZyUyMHJvb218ZW58MHx8fHwxNzgyMTk1MzM4fDA&ixlib=rb-4.1.0&q=85",
-      "dark": "https://images.unsplash.com/photo-1759722668087-efcc63c91ed2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzJ8MHwxfHNlYXJjaHwxfHxjbGVhbiUyMG1vZGVybiUyMGFwYXJ0bWVudCUyMGxpdmluZyUyMHJvb218ZW58MHx8fHwxNzgyMTk1MzM4fDA&ixlib=rb-4.1.0&q=85",
-      "alt": "Clean modern apartment living room"
+    "command_center_hero": {
+      "url": "https://images.unsplash.com/photo-1638191490002-731b813e8a72?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzB8MHwxfHNlYXJjaHwxfHxjbGVhbiUyMG1vZGVybiUyMGFic3RyYWN0JTIwYmFja2dyb3VuZHxlbnwwfHx8dGVhbHwxNzgyNzI3NTkxfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Clean modern abstract background"
     },
-    "dashboard_illustration": {
-      "url": "https://images.unsplash.com/photo-1758273705627-937374bfa978?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBob21lJTIwY2xlYW5lcnxlbnwwfHx8fDE3ODIxOTUzMzh8MA&ixlib=rb-4.1.0&q=85",
-      "alt": "Professional home cleaner working"
-    },
-    "avatar_cleaner": {
-      "url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdHxlbnwwfHx8fDE3ODIxOTUzMzh8MA&ixlib=rb-4.1.0&q=85",
-      "alt": "Cleaner avatar"
-    },
-    "avatar_owner": {
-      "url": "https://images.unsplash.com/photo-1560250097-0b93528c311a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdHxlbnwwfHx8fDE3ODIxOTUzMzh8MA&ixlib=rb-4.1.0&q=85",
-      "alt": "Company Owner avatar"
+    "profile_avatar_fallback": {
+      "url": "https://images.unsplash.com/photo-1650184706537-4f350d952cb4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwyfHxjbGVhbmluZyUyMHNlcnZpY2UlMjBwcm9mZXNzaW9uYWx8ZW58MHx8fHRlYWx8MTc4MjcyNzU3MHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Cleaning professional"
     }
   },
   "instructions_to_main_agent": [
-    "Apply '1 iOS-Native Clean' personality with the exact color tokens mapped to the user's requested palette: Dark navy (#0A192F for text/dark mode surface), Dark teal (brand), Greige (light surface/borders), Gold (warning/secondary), Light Sage Green (tertiary).",
-    "Map View Guidelines: Use 'react-native-maps'. Pin status colors are critical: Red=Pending (error token), Yellow/Gold=In progress (warning/brandSecondary token), Green=Completed (success token). Implement bottom-sheet peek for selected pins.",
-    "Checklist View: For the mandatory photo requirements, ensure placeholders are large and obvious (min height 120pt). The 'Complete Job' button must be fixed to the bottom and remain disabled until all required photos are taken.",
-    "Visual Hierarchy: Use Dark Navy instead of pure black for all primary text (`onSurface`) and deep dark mode backgrounds to maintain a premium feel.",
-    "Use Phosphor icons consistently, with a unified weight (e.g., regular). Only use filled icons for active states (like tab bars)."
+    "Strictly follow the Stripe/Linear token spacing and font hierarchy to achieve the premium feel. Use the provided shadow specs (boxShadow for web, elevation/shadow for native).",
+    "Card Density Fix: Strip out all explicit labels ('Price:', 'Address:', 'Date:'). Use layout and iconography to imply meaning. Limit to one primary metric per card.",
+    "Use react-native-reanimated for a universal 0.97 press scale on all interactive cards and primary buttons.",
+    "Implement the standardized empty state pattern (Icon -> 17px Title -> 13px Subtext -> Primary CTA) in a reusable component and deploy it across the requested screens.",
+    "Ensure the sticky CTA at the bottom of the Job Detail and Driver Mode uses the glassmorphism specs to float gracefully above scrolling content."
   ]
 }
