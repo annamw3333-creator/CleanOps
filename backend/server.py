@@ -931,6 +931,33 @@ async def add_member(team_id: str, body: TeamMemberIn, user=Depends(get_current_
     await db.teams.update_one({"team_id": team_id}, {"$addToSet": {"members": body.cleaner_id}})
     return {"ok": True}
 
+async def send_cleaner_invite(email: str, name: str, password: str) -> bool:
+    if not resend.api_key:
+        return False
+    try:
+        resend.Emails.send({
+            "from": RESEND_FROM,
+            "to": [email],
+            "subject": "You've been added to CleanOps",
+            "html": f"""
+              <div style="font-family:Arial,sans-serif;color:#0A192F">
+                <h2>Welcome to CleanOps, {name}!</h2>
+                <p>Your employer set up a CleanOps account for you. Open the CleanOps app and sign in with:</p>
+                <div style="background:#F1F4F6;border-radius:8px;padding:14px;margin:12px 0">
+                  <p style="margin:4px 0"><b>Email:</b> {email}</p>
+                  <p style="margin:4px 0"><b>Temporary password:</b> {password}</p>
+                </div>
+                <p>You'll see your assigned jobs, track your completed cleans, set availability and sync your calendar.
+                We recommend changing your password after your first login.</p>
+                <p style="color:#6B7280">— The CleanOps Team</p>
+              </div>
+            """,
+        })
+        return True
+    except Exception as e:
+        logger.error(f"cleaner invite email failed: {e}")
+        return False
+
 class CreateCleanerIn(BaseModel):
     name: str
     email: EmailStr
@@ -958,7 +985,9 @@ async def create_cleaner(body: CreateCleanerIn, user=Depends(get_current_user)):
     if body.team_id:
         await db.teams.update_one({"team_id": body.team_id, "owner_id": user["user_id"]},
                                   {"$addToSet": {"members": cid}})
-    return {"user_id": cid, "name": body.name, "email": body.email.lower(), "role": "cleaner", "account_origin": "employer"}
+    email_sent = await send_cleaner_invite(body.email.lower(), body.name, body.password)
+    return {"user_id": cid, "name": body.name, "email": body.email.lower(), "role": "cleaner",
+            "account_origin": "employer", "email_sent": email_sent}
 
 # ---------------- Chat ----------------
 @api_router.get("/conversations")

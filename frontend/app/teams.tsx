@@ -47,8 +47,9 @@ export default function Teams() {
     if (!ccName.trim() || !ccEmail.trim() || ccPass.length < 6) { setCcErr("Enter name, email, and a 6+ character password."); return; }
     setCcBusy(true); setCcErr("");
     try {
-      await api.post("/teams/create-cleaner", { name: ccName.trim(), email: ccEmail.trim(), password: ccPass, team_id: addTo });
-      setCcDone({ email: ccEmail.trim(), password: ccPass });
+      await api.post("/teams/create-cleaner", { name: ccName.trim(), email: ccEmail.trim(), password: ccPass, team_id: addTo }).then((r: any) => {
+        setCcDone({ email: ccEmail.trim(), password: ccPass, email_sent: r?.email_sent });
+      });
       setCcName(""); setCcEmail(""); setCcPass("");
       await load();
     } catch (e: any) { setCcErr(e.message || "Could not create cleaner"); }
@@ -147,7 +148,12 @@ export default function Teams() {
                   <Text style={styles.credText}>Email: {ccDone.email}</Text>
                   <Text style={styles.credText}>Password: {ccDone.password}</Text>
                 </View>
-                <Text style={styles.note2}>They'll only see jobs your company posts — never the open marketplace.</Text>
+                <Text style={styles.note2}>
+                  {ccDone.email_sent
+                    ? `📧 Login details emailed to ${ccDone.email}.`
+                    : "Email couldn't be sent automatically — share these details with your cleaner."}
+                </Text>
+                <Text style={styles.note2}>They will only see jobs your company posts — never the open marketplace.</Text>
                 <Button title="Done" onPress={() => { setCcOpen(false); setCcDone(null); setAddTo(null); }} testID="cc-done" />
               </View>
             ) : (
