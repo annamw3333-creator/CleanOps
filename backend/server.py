@@ -1221,8 +1221,11 @@ async def list_clients(user=Depends(get_current_user)):
             name = (j.get("client_name") or "Client").strip() or "Client"
             groups.setdefault(name.lower(), {"name": name, "jobs": []})["jobs"].append(j)
 
+    # Prefetch all users referenced across client groups in ONE query (avoids N+1 in the loop)
+    _all_ids = {cid for g in groups.values() for j in g["jobs"] for cid in j.get("assigned_cleaners", [])}
+    _all_ids |= {k for k in groups.keys() if isinstance(k, str)}
+    umap = await users_map(list(_all_ids))
     result = []
-    for key, g in groups.items():
         gjobs = g["jobs"]
         count = len(gjobs)
         created = sorted([j.get("created_at") for j in gjobs if j.get("created_at")])
