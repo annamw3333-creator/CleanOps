@@ -41,6 +41,7 @@ export default function OpsHub() {
       heading: "Business",
       tools: [
         { icon: "color-palette-outline", title: "Brand & Appearance", sub: "Set your company color for schedules", route: "/appearance", testID: "hub-appearance" },
+        { icon: "shield-checkmark-outline", title: "Security Log", sub: "Sign-ins, plan changes & key actions", route: "/audit-log", testID: "hub-audit-log" },
         { icon: "card-outline", title: "Subscription", sub: "Plan, billing & founding-partner rate", route: "/subscription", testID: "hub-subscription" },
       ],
     },

@@ -6,6 +6,7 @@ import os
 import logging
 import uuid
 import hashlib
+import hmac
 import secrets
 import math
 from pathlib import Path
@@ -224,15 +225,36 @@ def now_utc():
 def iso(dt):
     return dt.isoformat() if isinstance(dt, datetime) else dt
 
-def hash_password(pw: str) -> str:
-    salt = secrets.token_hex(16)
-    h = hashlib.sha256((salt + pw).encode()).hexdigest()
-    return f"{salt}${h}"
+import bcrypt
+from base64 import b64encode
 
-def verify_password(pw: str, stored: str) -> bool:
+def _bcrypt_input(pw: str) -> bytes:
+    """bcrypt only uses the first 72 bytes; pre-hash longer passwords so nothing is silently dropped."""
+    raw = pw.encode("utf-8")
+    if len(raw) <= 72:
+        return raw
+    return b64encode(hashlib.sha256(raw).digest())
+
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(_bcrypt_input(pw), bcrypt.gensalt(rounds=12)).decode()
+
+def _is_legacy_hash(stored: str) -> bool:
+    return bool(stored) and not stored.startswith("$2")
+
+def _verify_legacy(pw: str, stored: str) -> bool:
     try:
         salt, h = stored.split("$")
-        return hashlib.sha256((salt + pw).encode()).hexdigest() == h
+        return hmac.compare_digest(hashlib.sha256((salt + pw).encode()).hexdigest(), h)
+    except Exception:
+        return False
+
+def verify_password(pw: str, stored: str) -> bool:
+    if not stored:
+        return False
+    if _is_legacy_hash(stored):
+        return _verify_legacy(pw, stored)
+    try:
+        return bcrypt.checkpw(_bcrypt_input(pw), stored.encode())
     except Exception:
         return False
 
@@ -266,6 +288,21 @@ def client_ip(request: Optional[Request]) -> str:
     if fwd:
         return fwd.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+async def audit(actor: Optional[dict], action: str, detail: str = "",
+                request: Optional[Request] = None, target: Optional[str] = None):
+    """Lightweight security/audit trail. Best-effort; never breaks the request."""
+    try:
+        await db.audit_log.insert_one({
+            "audit_id": f"aud_{uuid.uuid4().hex[:10]}",
+            "actor_id": (actor or {}).get("user_id"),
+            "actor_email": (actor or {}).get("email"),
+            "actor_role": (actor or {}).get("role"),
+            "action": action, "detail": detail, "target": target,
+            "ip": client_ip(request), "created_at": now_utc(),
+        })
+    except Exception:
+        pass
 
 # Cap a single base64 field (~8M chars ≈ 6MB decoded) to prevent DB-bloat DoS.
 MAX_DOC_CHARS = 8_000_000
@@ -451,6 +488,7 @@ async def register(body: RegisterIn, request: Request):
     await db.users.insert_one(doc)
     doc = await ensure_admin(doc)
     token = await create_session(user_id)
+    await audit(doc, "register", f"role={body.role}", request)
     return {"token": token, "user": with_perks(clean(dict(doc)))}
 
 @api_router.post("/auth/login")
@@ -459,9 +497,13 @@ async def login(body: LoginIn, request: Request):
         raise HTTPException(status_code=429, detail="Too many login attempts. Please wait a minute and try again.")
     user = await db.users.find_one({"email": body.email.lower()})
     if not user or not user.get("password_hash") or not verify_password(body.password, user["password_hash"]):
+        await audit({"email": body.email.lower()}, "login_failed", body.email.lower(), request)
         raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if _is_legacy_hash(user["password_hash"]):
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"password_hash": hash_password(body.password)}})
     user = await ensure_admin(user)
     token = await create_session(user["user_id"])
+    await audit(user, "login", request=request)
     return {"token": token, "user": with_perks(clean(dict(user)))}
 
 @api_router.post("/auth/google")
@@ -520,6 +562,7 @@ async def upgrade_subscription(body: SubscriptionIn, user=Depends(get_current_us
     if body.tier == "free":
         updates["founding_member"] = False
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})
+    await audit(user, "subscription_change", f"tier={body.tier}")
     updated = await db.users.find_one({"user_id": user["user_id"]})
     return {"user": with_perks(clean(dict(updated)))}
 
@@ -1023,6 +1066,7 @@ async def delete_job(job_id: str, user=Depends(get_current_user)):
     if not job or (job["poster_id"] != user["user_id"] and user["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Not authorized")
     await db.jobs.delete_one({"job_id": job_id})
+    await audit(user, "job_delete", job.get("title", ""), target=job_id)
     return {"ok": True}
 
 @api_router.post("/jobs/{job_id}/checkin")
@@ -1214,6 +1258,7 @@ async def create_cleaner(body: CreateCleanerIn, user=Depends(get_current_user)):
         await db.teams.update_one({"team_id": body.team_id, "owner_id": user["user_id"]},
                                   {"$addToSet": {"members": cid}})
     email_sent = await send_cleaner_invite(body.email.lower(), body.name, body.password)
+    await audit(user, "create_cleaner", body.email.lower(), target=cid)
     return {"user_id": cid, "name": body.name, "email": body.email.lower(), "role": "cleaner",
             "account_origin": "employer", "email_sent": email_sent}
 
@@ -1917,6 +1962,19 @@ async def public_book_create(owner_id: str, body: PublicBookingIn, request: Requ
 
 class SmsTestIn(BaseModel):
     to: str
+
+@api_router.get("/audit-log")
+async def get_audit_log(user=Depends(get_current_user)):
+    if user["role"] == "admin":
+        q = {}
+    elif user["role"] in ("company_owner", "owner_cleaner"):
+        q = {"actor_id": user["user_id"]}
+    else:
+        raise HTTPException(status_code=403, detail="Audit log is available to owners and admins")
+    rows = await db.audit_log.find(q).sort("created_at", -1).to_list(200)
+    return [{"audit_id": r["audit_id"], "action": r["action"], "detail": r.get("detail", ""),
+             "actor_email": r.get("actor_email"), "actor_role": r.get("actor_role"),
+             "ip": r.get("ip"), "created_at": iso(r["created_at"])} for r in rows]
 
 @api_router.get("/twilio/status")
 async def twilio_status(user=Depends(get_current_user)):
