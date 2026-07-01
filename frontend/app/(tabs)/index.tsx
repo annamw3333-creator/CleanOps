@@ -138,6 +138,19 @@ export default function Dashboard() {
           </Card>
         )}
 
+        {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
+          <Card onPress={() => router.push("/sms-settings")} testID="sms-settings-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="chatbubbles-outline" size={20} color={colors.brand} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Text Notifications</Text>
+              <Text style={{ fontSize: 12, color: colors.muted }}>Client on-the-way, feedback & cleaner reminders</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+          </Card>
+        )}
+
         <Card onPress={() => router.push("/clients")} testID="clients-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
           <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="people-outline" size={20} color={colors.brand} />

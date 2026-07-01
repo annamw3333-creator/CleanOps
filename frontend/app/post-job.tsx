@@ -13,7 +13,7 @@ export default function PostJob() {
   const router = useRouter();
   const [f, setF] = useState<any>({
     title: "", clean_type: "standard", address: "", date: "", start_window_from: "09:00", start_window_to: "10:00",
-    estimated_duration: "2", client_name: "", client_notes: "", manager_notes: "", pay_rate: "30",
+    estimated_duration: "2", client_name: "", client_phone: "", client_notes: "", manager_notes: "", pay_rate: "30",
   });
   const [quals, setQuals] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,6 +64,7 @@ export default function PostJob() {
           </View>
 
           <Input label="Client Name" value={f.client_name} onChangeText={(v: string) => set("client_name", v)} placeholder="John Smith" testID="job-client" />
+          <Input label="Client Phone (for SMS updates)" value={f.client_phone} onChangeText={(v: string) => set("client_phone", v)} keyboardType="phone-pad" placeholder="+1 555 123 4567" testID="job-client-phone" />
           <Input label="Client Notes" value={f.client_notes} onChangeText={(v: string) => set("client_notes", v)} multiline placeholder="Gate code, pets, parking..." testID="job-client-notes" />
           <Input label="Manager / Scope Notes" value={f.manager_notes} onChangeText={(v: string) => set("manager_notes", v)} multiline placeholder="Expectations, scope of work..." testID="job-manager-notes" />
 

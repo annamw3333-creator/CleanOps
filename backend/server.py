@@ -39,6 +39,54 @@ import resend  # Resend transactional email
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
 RESEND_FROM = os.environ.get("RESEND_FROM", "CleanOps <onboarding@resend.dev>")
 
+# ---------------- Twilio SMS ----------------
+from twilio.rest import Client as TwilioClient
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "")
+_twilio_client = None
+if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+    try:
+        _twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Twilio init failed: {e}")
+
+def sms_configured() -> bool:
+    return bool(_twilio_client and TWILIO_FROM_NUMBER)
+
+def normalize_phone(phone: Optional[str]) -> Optional[str]:
+    """Best-effort E.164. Assumes North American (+1) when no country code given."""
+    if not phone:
+        return None
+    p = "".join(ch for ch in phone if ch.isdigit() or ch == "+")
+    if not p:
+        return None
+    if p.startswith("+"):
+        return p
+    digits = "".join(ch for ch in p if ch.isdigit())
+    if len(digits) == 10:
+        return f"+1{digits}"
+    if len(digits) == 11 and digits.startswith("1"):
+        return f"+{digits}"
+    return f"+{digits}"
+
+async def send_sms(to: Optional[str], body: str) -> dict:
+    """Send an SMS via Twilio. Gracefully no-ops (SEND BLOCKED) when not configured."""
+    dest = normalize_phone(to)
+    if not sms_configured():
+        logging.getLogger(__name__).info(f"SMS SEND BLOCKED (not configured) -> {dest}: {body[:60]}")
+        return {"sent": False, "reason": "not_configured"}
+    if not dest:
+        return {"sent": False, "reason": "no_phone"}
+    try:
+        msg = await asyncio.to_thread(
+            lambda: _twilio_client.messages.create(to=dest, from_=TWILIO_FROM_NUMBER, body=body)
+        )
+        return {"sent": True, "sid": msg.sid}
+    except Exception as e:
+        logging.getLogger(__name__).error(f"SMS send failed -> {dest}: {e}")
+        return {"sent": False, "reason": str(e)}
+
 # Phased pricing (amounts in cents). Checkout charges the FIRST phase price; a Stripe
 # subscription schedule then auto-steps through the remaining phases. months=None => final ongoing phase.
 FOUNDING_LIMIT = 10
@@ -281,6 +329,7 @@ class JobIn(BaseModel):
     start_window_to: str
     estimated_duration: float
     client_name: str
+    client_phone: Optional[str] = ""
     client_notes: Optional[str] = ""
     manager_notes: Optional[str] = ""
     required_qualifications: List[str] = []
@@ -485,6 +534,49 @@ async def reminder_loop():
         except Exception as e:
             logger.error(f"reminder_loop error: {e}")
         await asyncio.sleep(6 * 3600)
+
+async def send_cleaner_reminders():
+    """Text cleaners about cleans happening tomorrow, and about missed start times today."""
+    if not sms_configured():
+        return
+    now = now_utc()
+    today = now.strftime("%Y-%m-%d")
+    tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    jobs = await db.jobs.find({"status": {"$in": ["pending", "in_progress"]},
+                               "assigned_cleaners.0": {"$exists": True}}).to_list(1000)
+    for j in jobs:
+        d = (j.get("date") or "")[:10]
+        cids = j.get("assigned_cleaners", [])
+        umap = await users_map(cids)
+        ct = (j.get("clean_type") or "standard").replace("_", " ")
+        poster = j.get("poster_name", "CleanOps")
+        if d == tomorrow and not j.get("sms_upcoming_sent"):
+            for cid in cids:
+                c = umap.get(cid)
+                if c and c.get("phone"):
+                    await send_sms(c["phone"], f"Reminder: you have a {ct} clean tomorrow at {j.get('start_window_from','')} — {j.get('address','')}. — {poster}")
+            await db.jobs.update_one({"job_id": j["job_id"]}, {"$set": {"sms_upcoming_sent": True}})
+        if d == today and j.get("status") == "pending" and not j.get("checked_in_at") and not j.get("sms_missed_sent"):
+            to_t = j.get("start_window_to")
+            start_dt = None
+            try:
+                start_dt = datetime.strptime(f"{d} {to_t}", "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+            except Exception:
+                pass
+            if start_dt and now > start_dt + timedelta(minutes=15):
+                for cid in cids:
+                    c = umap.get(cid)
+                    if c and c.get("phone"):
+                        await send_sms(c["phone"], f"Heads up: your {ct} clean at {j.get('address','')} was due to start by {to_t} and hasn't been checked in. Please update the client. — {poster}")
+                await db.jobs.update_one({"job_id": j["job_id"]}, {"$set": {"sms_missed_sent": True}})
+
+async def sms_reminder_loop():
+    while True:
+        try:
+            await send_cleaner_reminders()
+        except Exception as e:
+            logger.error(f"sms_reminder_loop error: {e}")
+        await asyncio.sleep(30 * 60)
 
 class CheckoutIn(BaseModel):
     tier: Literal["founding", "professional", "enterprise"]
@@ -946,6 +1038,15 @@ async def complete_job(job_id: str, user=Depends(get_current_user)):
     await log_activity(job, "completed", f"{job.get('title')} completed by {user['name']}")
     if anomaly:
         await log_activity(job, "anomaly", f"\u26a0\ufe0f {job.get('title')} took {anomaly['delta_pct']}% {anomaly['direction']} than usual ({hours}h vs {anomaly['avg_hours']}h avg)")
+    # Post-clean feedback survey text to the client
+    phone = job.get("client_phone") or (job.get("client_contact") or {}).get("phone")
+    if phone:
+        token = job.get("feedback_token") or secrets.token_urlsafe(9)
+        await db.jobs.update_one({"job_id": job_id}, {"$set": {"feedback_token": token}})
+        base = os.environ.get("APP_PUBLIC_URL", "").rstrip("/")
+        link = f"{base}/feedback/{token}" if base else f"feedback code {token}"
+        cn = job.get("client_name") or "there"
+        await send_sms(phone, f"Hi {cn}, thanks for choosing {job.get('poster_name','us')}! Your {(job.get('clean_type') or 'standard').replace('_',' ')} clean is complete. We'd love your feedback: {link}")
     updated = await db.jobs.find_one({"job_id": job_id})
     return await enrich_job(updated)
 
@@ -1501,6 +1602,11 @@ async def enroute_job(job_id: str, body: LocationIn, user=Depends(get_current_us
     await db.jobs.update_one({"job_id": job_id}, {"$set": {"enroute_at": now_utc(), "tracking": True}})
     await _set_job_location(job_id, user, "enroute", body.latitude, body.longitude)
     await log_activity(job, "enroute", f"{user['name']} is on the way to {job.get('title')}")
+    phone = job.get("client_phone") or (job.get("client_contact") or {}).get("phone")
+    if phone:
+        cn = job.get("client_name") or "there"
+        ct = (job.get("clean_type") or "standard").replace("_", " ")
+        await send_sms(phone, f"Hi {cn}, your cleaner {user['name']} is on the way for your {ct} clean at {job.get('address','your home')}. — {job.get('poster_name','CleanOps')}")
     return await enrich_job(await db.jobs.find_one({"job_id": job_id}))
 
 @api_router.post("/jobs/{job_id}/location")
@@ -1738,6 +1844,29 @@ async def public_book_create(owner_id: str, body: PublicBookingIn):
     await log_activity(doc, "booking", f"New online booking from {body.client_name} ({label})")
     return {"ok": True, "message": "Booking received! The team will reach out to confirm shortly."}
 
+class SmsTestIn(BaseModel):
+    to: str
+
+@api_router.get("/twilio/status")
+async def twilio_status(user=Depends(get_current_user)):
+    return {"configured": sms_configured(),
+            "has_account_sid": bool(TWILIO_ACCOUNT_SID),
+            "has_auth_token": bool(TWILIO_AUTH_TOKEN),
+            "has_from_number": bool(TWILIO_FROM_NUMBER),
+            "from_number": TWILIO_FROM_NUMBER}
+
+@api_router.post("/twilio/test")
+async def twilio_test(body: SmsTestIn, user=Depends(get_current_user)):
+    if user["role"] not in ("company_owner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=403, detail="Only owners can send test messages")
+    res = await send_sms(body.to, f"CleanOps test message — SMS is working for {user.get('name','your team')}! \U0001F9F9")
+    if not res.get("sent"):
+        reason = res.get("reason", "unknown")
+        if reason == "not_configured":
+            raise HTTPException(status_code=400, detail="SMS not configured. Add TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER to the backend .env.")
+        raise HTTPException(status_code=400, detail=f"Send failed: {reason}")
+    return res
+
 app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
@@ -1753,6 +1882,7 @@ async def startup():
     await db.users.create_index("user_id", unique=True)
     await db.user_sessions.create_index("session_token", unique=True)
     asyncio.create_task(reminder_loop())
+    asyncio.create_task(sms_reminder_loop())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
