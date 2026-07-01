@@ -58,6 +58,8 @@ export default function JobDetail() {
   const act = async (fn: () => Promise<any>) => { setBusy(true); try { await fn(); await load(); } catch (e: any) { alert(e.message); } finally { setBusy(false); } };
   const apply = () => act(async () => { const r = await api.post(`/jobs/${id}/apply`); alert(r.auto_accepted ? "Auto-accepted! Job is yours." : "Application submitted."); });
   const assign = (cid: string) => act(async () => { await api.post(`/jobs/${id}/assign`, { cleaner_id: cid }); setAssignOpen(false); });
+  const unassign = (cid: string) => act(async () => { await api.post(`/jobs/${id}/unassign`, { cleaner_id: cid }); });
+  const assignSelf = () => act(async () => { await api.post(`/jobs/${id}/assign-self`); });
   const openAssign = async () => {
     try {
       const u = await api.get("/users");

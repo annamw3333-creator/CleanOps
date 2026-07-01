@@ -190,6 +190,7 @@ TASK_ITEMS = {
     "standard": ["Dust all surfaces", "Vacuum & mop floors", "Clean & sanitize bathrooms", "Wipe kitchen counters", "Empty trash bins"],
     "deep": ["Dust all surfaces", "Vacuum & mop floors", "Deep scrub bathrooms", "Clean inside appliances", "Baseboards & vents", "Wipe walls & doors", "Empty trash bins"],
     "airbnb": ["Strip & remake beds", "Restock amenities", "Vacuum & mop floors", "Sanitize bathrooms", "Clean kitchen & dishes", "Stage & final walkthrough"],
+    "move_out": ["Empty & wipe all cabinets/drawers", "Clean inside all appliances", "Deep scrub bathrooms & descale", "Clean inside windows & tracks", "Baseboards, doors & light switches", "Spot-clean walls & remove marks", "Vacuum & mop all floors", "Remove all trash & debris", "Final walkthrough photos"],
 }
 
 def build_checklist(clean_type: str):
@@ -250,7 +251,7 @@ class SubscriptionIn(BaseModel):
 
 class JobIn(BaseModel):
     title: str
-    clean_type: Literal["standard", "deep", "airbnb"] = "standard"
+    clean_type: Literal["standard", "deep", "airbnb", "move_out"] = "standard"
     address: str
     latitude: float
     longitude: float
@@ -779,6 +780,28 @@ async def assign_job(job_id: str, body: TeamMemberIn, user=Depends(get_current_u
     await db.jobs.update_one({"job_id": job_id}, {
         "$addToSet": {"assigned_cleaners": body.cleaner_id},
         "$pull": {"applicants": body.cleaner_id},
+    })
+    updated = await db.jobs.find_one({"job_id": job_id})
+    return await enrich_job(updated)
+
+@api_router.post("/jobs/{job_id}/unassign")
+async def unassign_job(job_id: str, body: TeamMemberIn, user=Depends(get_current_user)):
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job or (job["poster_id"] != user["user_id"] and user["role"] != "admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    await db.jobs.update_one({"job_id": job_id}, {"$pull": {"assigned_cleaners": body.cleaner_id}})
+    updated = await db.jobs.find_one({"job_id": job_id})
+    return await enrich_job(updated)
+
+@api_router.post("/jobs/{job_id}/assign-self")
+async def assign_self(job_id: str, user=Depends(get_current_user)):
+    """Owner/manager assigns themselves to clean their own posted job."""
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job or (job["poster_id"] != user["user_id"] and user["role"] != "admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    await db.jobs.update_one({"job_id": job_id}, {
+        "$addToSet": {"assigned_cleaners": user["user_id"]},
+        "$pull": {"applicants": user["user_id"]},
     })
     updated = await db.jobs.find_one({"job_id": job_id})
     return await enrich_job(updated)

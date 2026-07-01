@@ -5,7 +5,7 @@ import { api } from "@/src/api";
 import { Screen, Header, Input, Button, Chip, colors, spacing, radius } from "@/src/components/UI";
 import { QUALIFICATIONS } from "@/src/theme";
 
-const TYPES = [{ k: "standard", l: "Standard" }, { k: "deep", l: "Deep Clean" }, { k: "airbnb", l: "Airbnb Turnover" }];
+const TYPES = [{ k: "standard", l: "Standard" }, { k: "deep", l: "Deep Clean" }, { k: "airbnb", l: "Airbnb Turnover" }, { k: "move_out", l: "Move-out" }];
 // scattered around NYC for demo markers
 const rand = () => ({ lat: 40.7128 + (Math.random() - 0.5) * 0.08, lng: -74.006 + (Math.random() - 0.5) * 0.08 });
 
