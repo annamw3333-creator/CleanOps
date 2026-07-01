@@ -1226,6 +1226,7 @@ async def list_clients(user=Depends(get_current_user)):
     _all_ids |= {k for k in groups.keys() if isinstance(k, str)}
     umap = await users_map(list(_all_ids))
     result = []
+    for key, g in groups.items():
         gjobs = g["jobs"]
         count = len(gjobs)
         created = sorted([j.get("created_at") for j in gjobs if j.get("created_at")])
@@ -1250,11 +1251,7 @@ async def list_clients(user=Depends(get_current_user)):
             for cid in j.get("assigned_cleaners", []):
                 cleaner_ids.add(cid)
         primary_type = max(clean_types, key=clean_types.get) if clean_types else "standard"
-        cleaners = []
-        for cid in cleaner_ids:
-            c = await db.users.find_one({"user_id": cid})
-            if c:
-                cleaners.append(c["name"])
+        cleaners = [umap[cid]["name"] for cid in cleaner_ids if cid in umap]
         prof = await db.client_profiles.find_one({"owner_id": user["user_id"], "key": str(key)})
         # for cleaners, contact info comes from the poster user record if available
         contact_phone = (prof or {}).get("phone", "")
