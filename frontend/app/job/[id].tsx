@@ -220,6 +220,11 @@ export default function JobDetail() {
                       <Text style={styles.personName}>{c.name}</Text>
                       <Text style={styles.rate}>{c.completed_count || 0} cleans completed</Text>
                     </View>
+                    {isPoster && job.status !== "completed" && job.status !== "cancelled" && (
+                      <Pressable onPress={() => unassign(c.user_id)} hitSlop={8} style={styles.unassignBtn} testID={`unassign-${c.user_id}`}>
+                        <Ionicons name="person-remove-outline" size={18} color={colors.error} />
+                      </Pressable>
+                    )}
                   </View>
                 ))}
               </Card>
@@ -293,6 +298,9 @@ export default function JobDetail() {
         {isPoster && (job.status === "pending" || job.status === "in_progress") && (
           <Button title="Assign a Cleaner" icon="person-add" variant={canApply && !isAssigned && job.status === "pending" ? "outline" : "primary"} onPress={openAssign} testID="assign-cleaner-button" />
         )}
+        {isPoster && canApply && (job.status === "pending" || job.status === "in_progress") && !job.assigned_cleaners?.includes(user?.user_id) && (
+          <Button title="Assign to Me" icon="person" variant="ghost" onPress={assignSelf} loading={busy} testID="assign-self-button" />
+        )}
         {isAssigned && job.status === "pending" && myResp !== "accepted" && (
           <>
             <View style={{ flexDirection: "row", gap: spacing.sm }}>
@@ -330,6 +338,12 @@ export default function JobDetail() {
         )}
         {job.status === "completed" && (
           <View style={styles.completed}><Ionicons name="checkmark-circle" size={20} color={colors.success} /><Text style={styles.completedText}>Completed · {job.logged_hours}h logged{job.logged_pay ? ` · $${job.logged_pay}` : ""}</Text></View>
+        )}
+        {job.status === "completed" && job.anomaly && (
+          <View style={styles.anomalyBox} testID="anomaly-badge">
+            <Ionicons name="alert-circle" size={16} color={colors.gold} />
+            <Text style={styles.anomalyText}>Took {job.anomaly.delta_pct}% {job.anomaly.direction} than usual · {job.anomaly.this_hours}h vs {job.anomaly.avg_hours}h avg</Text>
+          </View>
         )}
         {job.status === "completed" && isPoster && job.assigned_cleaners_info?.length > 0 && (
           <Button title="Rate Cleaner" icon="star" variant="secondary" onPress={() => setReviewing(true)} testID="rate-cleaner-button" />
@@ -477,4 +491,7 @@ const styles = StyleSheet.create({
   fbBox: { backgroundColor: colors.sage + "55", borderRadius: radius.md, padding: spacing.md, gap: 4 },
   fbRating: { fontSize: 13, fontWeight: "700", color: colors.onSurface },
   fbComment: { fontSize: 13, color: colors.onSurface, fontStyle: "italic" },
+  unassignBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.error + "15" },
+  anomalyBox: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.gold + "22", borderRadius: radius.md, padding: spacing.sm },
+  anomalyText: { flex: 1, fontSize: 12, fontWeight: "600", color: colors.onSurface },
 });

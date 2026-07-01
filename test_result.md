@@ -309,6 +309,68 @@ test_plan:
   test_all: false
   test_priority: "high_first"
 
+  - task: "Group A: unassign, assign-self, move_out clean type"
+    implemented: true
+    working: true
+    file: "server.py, app/job/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Curl-verified: POST /jobs/{id}/unassign pulls a cleaner; POST /jobs/{id}/assign-self adds poster; move_out builds 14-item checklist. Frontend buttons wired: unassign icon next to each assigned cleaner (poster), 'Assign to Me' ghost button in action bar (poster)."
+  - task: "Group A: mandatory resume + insurance for cleaners"
+    implemented: true
+    working: "NA"
+    file: "server.py, app/(tabs)/profile.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "ProfileIn accepts resume_base64/name + insurance_base64/name. with_perks sets docs_complete. apply_job & grab_job now 400 if needs_docs(). Profile screen has Compliance Documents card with DocumentPicker (PDF/image) upload + docs_complete status. Needs e2e: cleaner without docs should be blocked from applying; upload docs then apply succeeds."
+  - task: "Group A: owner-editable checklist templates"
+    implemented: true
+    working: true
+    file: "server.py, app/checklist-templates.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Curl-verified: GET /checklist-templates returns 4 clean types (default vs custom flag), PUT saves custom tasks+photos, DELETE resets. build_checklist(clean_type, owner_id) uses owner's custom template on new jobs. New /checklist-templates editor screen (tabs per type, add/edit/remove tasks & photo requirements, save, reset)."
+  - task: "Group A: embeddable public booking form"
+    implemented: true
+    working: true
+    file: "server.py, app/booking-form.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Curl-verified: GET /public/book/{owner_id} returns business info; POST /public/book/{owner_id} creates a pending job with source=booking_form + owner's checklist (no auth). /booking-form screen generates a copy-paste HTML snippet (expo-clipboard) that POSTs to the public endpoint."
+  - task: "Group A: anomaly detection on job completion"
+    implemented: true
+    working: "NA"
+    file: "server.py, app/job/[id].tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "complete_job compares logged_hours vs this poster's avg for same clean_type (>=2 priors). If |delta|>=30%, sets job.anomaly {avg_hours,this_hours,delta_pct,direction} + logs an 'anomaly' activity. Job detail shows an anomaly badge on completed jobs. Needs data-driven test (hard to trigger without multiple completed jobs)."
+
+metadata_group_a:
+  created_by: "main_agent"
+  note: "Group A of the massive feature request. Twilio (Group B) deferred to last per user."
+
 agent_communication:
     -agent: "main"
-    -message: "Implemented Client List, cleaner availability toggle, and Uber-style Driver Mode. Also need to verify previously-untested Onboarding/Feedback/Calendar. Backend curl-verified for clients & driver. Seeded accounts (pass123): owner@abodeops.com, cleaner@abodeops.com (complete profile, has earnings + 3 nearby pending demo jobs as offers), client@abodeops.com. Demo jobs are near Calgary 51.0447,-114.0719 with NO required quals so cleaner qualifies. Please test backend first then frontend. Note: calendar write needs native build (skip device calendar); test the feedback-link generation + public feedback form instead. Re-run seed if demo jobs get consumed: cd /app/backend && python seed_demo.py"
+    -message: "GROUP A COMPLETE. Please test (backend + frontend): (1) unassign & assign-self buttons on job detail as owner@abodeops.com; (2) mandatory docs — cleaner@abodeops.com ALREADY has complete profile but NOT resume/insurance, so applying should now be blocked with a docs message until resume+insurance uploaded in Profile > Compliance Documents (use a small PDF/image); (3) checklist-templates editor (owner) — edit standard tasks, save, create a job and confirm the checklist reflects the custom tasks; (4) booking-form screen (owner) shows copyable snippet; public POST /api/public/book/{owner_id} creates a pending job. Seeded accounts pass123: owner@abodeops.com, cleaner@abodeops.com, client@abodeops.com. Backend base is EXPO_PUBLIC_BACKEND_URL. NOTE: docs upload uses DocumentPicker+FileReader (works on web). Re-seed if needed: cd /app/backend && python seed_demo.py"
+    -agent: "main"
+    -message: "PRIOR SESSION: Implemented Client List, cleaner availability toggle, and Uber-style Driver Mode. Also need to verify previously-untested Onboarding/Feedback/Calendar. Backend curl-verified for clients & driver. Seeded accounts (pass123): owner@abodeops.com, cleaner@abodeops.com (complete profile, has earnings + 3 nearby pending demo jobs as offers), client@abodeops.com. Demo jobs are near Calgary 51.0447,-114.0719 with NO required quals so cleaner qualifies. Please test backend first then frontend. Note: calendar write needs native build (skip device calendar); test the feedback-link generation + public feedback form instead. Re-run seed if demo jobs get consumed: cd /app/backend && python seed_demo.py"

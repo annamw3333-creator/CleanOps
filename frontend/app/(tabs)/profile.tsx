@@ -6,6 +6,8 @@ import { Screen, Header, Card, Button, Input, Avatar, Chip, RatingLabel, colors,
 import { QUALIFICATIONS, SUBSCRIPTION_TIERS } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import { Platform } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 
@@ -22,6 +24,10 @@ export default function Profile() {
   const [saved, setSaved] = useState(false);
   const [experience, setExperience] = useState(user?.experience_summary || "");
   const [portfolio, setPortfolio] = useState<string[]>(user?.portfolio || []);
+  const [resumeB64, setResumeB64] = useState<string>(user?.resume_base64 || "");
+  const [resumeName, setResumeName] = useState<string>(user?.resume_name || "");
+  const [insuranceB64, setInsuranceB64] = useState<string>(user?.insurance_base64 || "");
+  const [insuranceName, setInsuranceName] = useState<string>(user?.insurance_name || "");
   const [myReviews, setMyReviews] = useState<any>(null);
   const isCleaner = user?.role === "cleaner" || user?.role === "owner_cleaner" || user?.role === "admin";
 
@@ -41,6 +47,27 @@ export default function Profile() {
     setPortfolio((p) => (p.length >= 25 ? p : [...p, `data:image/jpeg;base64,${res.assets[0].base64}`]));
   };
 
+  const readAsBase64 = async (uri: string): Promise<string> => {
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onerror = reject;
+      r.onloadend = () => resolve(r.result as string);
+      r.readAsDataURL(blob);
+    });
+  };
+  const pickDoc = async (kind: "resume" | "insurance") => {
+    const res = await DocumentPicker.getDocumentAsync({ type: ["application/pdf", "image/*"], copyToCacheDirectory: true });
+    if (res.canceled || !res.assets?.[0]) return;
+    const asset = res.assets[0];
+    try {
+      const b64 = await readAsBase64(asset.uri);
+      if (kind === "resume") { setResumeB64(b64); setResumeName(asset.name || "resume"); }
+      else { setInsuranceB64(b64); setInsuranceName(asset.name || "insurance"); }
+    } catch { alert("Could not read that file. Try a smaller PDF or image."); }
+  };
+
   const save = async () => {
     setSaving(true); setSaved(false);
     try {
@@ -51,6 +78,10 @@ export default function Profile() {
         auto_accept: autoAccept,
         experience_summary: experience,
         portfolio,
+        resume_base64: resumeB64,
+        resume_name: resumeName,
+        insurance_base64: insuranceB64,
+        insurance_name: insuranceName,
       });
       setUser(res.user);
       setSaved(true);
@@ -177,6 +208,17 @@ export default function Profile() {
           </Card>
         )}
 
+        {isCleaner && (
+          <Card style={{ gap: spacing.md }} testID="documents-card">
+            <Text style={styles.section}>Compliance Documents</Text>
+            <Text style={[styles.hint, !(resumeB64 && insuranceB64) && { color: colors.error }]}>
+              {resumeB64 && insuranceB64 ? "All documents uploaded ✓ — you can take jobs." : "Required — upload your resume and proof of insurance before you can take jobs."}
+            </Text>
+            <DocRow label="Resume / CV" name={resumeName} has={!!resumeB64} onPick={() => pickDoc("resume")} onClear={() => { setResumeB64(""); setResumeName(""); }} testID="pick-resume" />
+            <DocRow label="Proof of Insurance" name={insuranceName} has={!!insuranceB64} onPick={() => pickDoc("insurance")} onClear={() => { setInsuranceB64(""); setInsuranceName(""); }} testID="pick-insurance" />
+          </Card>
+        )}
+
         {isCleaner && myReviews && (
           <Card style={{ gap: spacing.md }} testID="reviews-card">
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
@@ -206,6 +248,24 @@ export default function Profile() {
   );
 }
 
+const DocRow = ({ label, name, has, onPick, onClear, testID }: any) => (
+  <View style={styles.docRow}>
+    <Ionicons name={has ? "document-text" : "document-attach-outline"} size={22} color={has ? colors.success : colors.brand} />
+    <View style={{ flex: 1 }}>
+      <Text style={styles.docLabel}>{label}</Text>
+      <Text style={styles.hint} numberOfLines={1}>{has ? (name || "Uploaded") : "Not uploaded (PDF or image)"}</Text>
+    </View>
+    {has ? (
+      <Pressable onPress={onClear} hitSlop={8} style={styles.docClear} testID={`${testID}-clear`}>
+        <Ionicons name="close" size={16} color={colors.error} />
+      </Pressable>
+    ) : null}
+    <Pressable onPress={onPick} style={styles.docBtn} testID={testID}>
+      <Text style={styles.docBtnText}>{has ? "Replace" : "Upload"}</Text>
+    </Pressable>
+  </View>
+);
+
 const styles = StyleSheet.create({
   top: { alignItems: "center", gap: 6 },
   name: { fontSize: 22, fontWeight: "800", color: colors.onSurface, marginTop: spacing.sm },
@@ -233,4 +293,9 @@ const styles = StyleSheet.create({
   thumbX: { position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: 10, backgroundColor: "#000a", alignItems: "center", justifyContent: "center" },
   addThumb: { width: 80, height: 80, borderRadius: 10, borderWidth: 2, borderColor: colors.border, borderStyle: "dashed", alignItems: "center", justifyContent: "center" },
   addThumbText: { fontSize: 11, color: colors.brand, fontWeight: "600" },
+  docRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
+  docLabel: { fontSize: 14, fontWeight: "700", color: colors.onSurface },
+  docBtn: { backgroundColor: colors.brand, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill },
+  docBtnText: { color: "#fff", fontWeight: "700", fontSize: 12.5 },
+  docClear: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.error + "18" },
 });

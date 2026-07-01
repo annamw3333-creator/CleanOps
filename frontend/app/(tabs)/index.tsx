@@ -112,6 +112,32 @@ export default function Dashboard() {
           </Card>
         )}
 
+        {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
+          <Card onPress={() => router.push("/booking-form")} testID="booking-form-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="code-slash-outline" size={20} color={colors.brand} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Booking Form</Text>
+              <Text style={{ fontSize: 12, color: colors.muted }}>Embeddable form for your website</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+          </Card>
+        )}
+
+        {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
+          <Card onPress={() => router.push("/checklist-templates")} testID="checklist-templates-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="list-outline" size={20} color={colors.brand} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Checklist Templates</Text>
+              <Text style={{ fontSize: 12, color: colors.muted }}>Customize tasks & required photos per clean</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+          </Card>
+        )}
+
         <Card onPress={() => router.push("/clients")} testID="clients-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
           <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="people-outline" size={20} color={colors.brand} />

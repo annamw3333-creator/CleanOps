@@ -1,0 +1,41 @@
+{
+  "summary": "Group A end-to-end testing complete. Backend: 9/9 targeted tests PASS (unassign, assign-self, move_out 14-item checklist, mandatory docs block+unblock via resume+insurance, checklist template GET/PUT/DELETE with custom flag + new-job propagation, public booking form GET/POST no-auth). Anomaly-detection test SKIPPED (best-effort — cannot force logged_hours delta through the API because complete_job derives hours from checked_in_at delta). Frontend: booking-form-card and checklist-templates-card render on owner home; /checklist-templates screen shows all 4 type tabs, save-template button, move_out tab renders exactly 9 tasks + 5 photos; /booking-form screen shows copyable HTML snippet with /public/book/ URL and copy-snippet button; cleaner profile has pick-resume + pick-insurance under documents-card. ONE FRONTEND BUG FOUND: assign-self-button is GATED behind canApply=['cleaner','owner_cleaner','admin'] but owner@abodeops.com has role='company_owner', so the 'Assign to Me' button never renders for the exact scenario in the spec. Backend /api/jobs/{id}/assign-self works fine (test passes) — the bug is purely in the UI conditional at /app/frontend/app/job/[id].tsx:301.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/jobs/{id}/assign-self", "issue": "Endpoint does not enforce needs_docs() for cleaner/owner_cleaner posters; if a poster is an owner_cleaner without docs uploaded and self-assigns, they can bypass the docs gate that /apply and /grab enforce. Low priority — poster owns the job so business risk is minimal."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "job/[id].tsx sticky action bar", "issue": "assign-self-button conditional is `isPoster && canApply && ...` where canApply excludes 'company_owner'. Owner@abodeops.com is role=company_owner, so 'Assign to Me' NEVER renders for the exact test scenario stated in the review request. Fix: change condition to `isPoster && (job.status === 'pending' || job.status === 'in_progress') && !job.assigned_cleaners?.includes(user?.user_id)` (drop canApply) — the backend already permits any poster to self-assign.", "testID": "assign-self-button", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_group_a.py",
+    "/app/test_reports/pytest/group_a_results.xml"
+  ],
+  "action_items": [
+    "FIX: /app/frontend/app/job/[id].tsx:301 — remove `canApply &&` from the assign-self-button conditional (or add 'company_owner' to canApply). Currently owner@abodeops.com cannot see the 'Assign to Me' button as required by the spec.",
+    "OPTIONAL: consider having backend /api/jobs/{id}/assign-self enforce needs_docs() when the assigning user's role is cleaner/owner_cleaner, to match the /apply and /grab gates.",
+    "OPTIONAL: extend anomaly-detection test with a MongoDB direct-insert helper to seed 2 completed jobs with fixed logged_hours, so end-to-end anomaly path can be verified in CI (currently skipped)."
+  ],
+  "critical_code_review_comments": [
+    "Public booking POST at /api/public/book/{owner_id} correctly has NO auth dependency and creates job with source='booking_form' — appears in owner's Work Hub with status='pending'. ✓",
+    "build_checklist(clean_type, owner_id) correctly checks db.checklist_templates for a per-owner override before falling back to defaults — verified via new job creation after PUT template.",
+    "with_perks() correctly derives docs_complete from resume_base64 + insurance_base64 for cleaner/owner_cleaner (line 96) and returns True for other roles (line 100). ✓",
+    "PUT /api/profile returns response wrapped as {user: {...}} while other endpoints return raw user — minor inconsistency but not blocking; frontend already handles it."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_group_a.py (new)"
+  ],
+  "success_rate": {"backend": "9/9 (100%) targeted Group A tests pass; 1 skipped (anomaly — infra limitation, not a bug)", "frontend": "All testIDs render correctly (booking-form-card, checklist-templates-card, save-template, type-move_out, snippet-text, copy-snippet, pick-resume, pick-insurance, assign-cleaner-button, unassign-*, documents-card). 1 bug: assign-self-button does not render for company_owner role."},
+  "seed_data_creation": "All test jobs and checklist templates prefixed with TEST_ and cleaned up in fixture teardown. Cleaner's original resume/insurance snapshot & restored.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Group A backend endpoints all work as specified. Only outstanding issue is the assign-self-button conditional in job/[id].tsx. After the main agent fixes /app/frontend/app/job/[id].tsx:301 (drop `canApply &&` or add company_owner to canApply array), re-run browser test as owner@abodeops.com → tap a pending job the owner posted → assign-self-button should render → tap → cleaner list should show the owner with an unassign-* button → tap unassign icon → owner removed. Backend regression tests live at /app/backend/tests/test_group_a.py and can be re-run with: `cd /app && python -m pytest backend/tests/test_group_a.py -v`.",
+  "rca_of_issue": "assign-self-button not visible for company_owner: The action-bar conditional in /app/frontend/app/job/[id].tsx (line 301) reads `{isPoster && canApply && ...}`. `canApply` is defined at line 27 as `['cleaner','owner_cleaner','admin'].includes(user?.role||'')`, which does NOT include 'company_owner'. Since owner@abodeops.com has role='company_owner' (verified via /api/auth/login response), the button is unconditionally hidden despite the backend endpoint /api/jobs/{id}/assign-self accepting the request (line 819-830 in server.py — only checks isPoster, no role restriction). Reproduction: login as owner@abodeops.com, tap any pending job you posted → 'Assign a Cleaner' shows, 'Assign to Me' does not. Backend curl `POST /api/jobs/{id}/assign-self` with owner token returns 200 and adds owner to assigned_cleaners (confirmed by passing test_assign_self_and_unassign). Mitigation: drop the canApply gate (backend already restricts to isPoster) OR add 'company_owner' to the canApply array."
+}

@@ -75,6 +75,10 @@ def is_employer_cleaner(user: dict) -> bool:
     """A cleaner whose login was created by an employer — locked to that employer's jobs."""
     return user.get("account_origin") == "employer" and bool(user.get("employer_id"))
 
+def needs_docs(user: dict) -> bool:
+    """Cleaners must upload a resume + proof of insurance before taking jobs."""
+    return user.get("role") in ("cleaner", "owner_cleaner") and not (user.get("resume_base64") and user.get("insurance_base64"))
+
 def job_cap(user: dict):
     return CLEANER_JOB_CAPS.get(user.get("tier", "free"), 5)
 
@@ -89,8 +93,11 @@ def with_perks(u: dict) -> dict:
     tier = u.get("tier", "free")
     u["ads_enabled"] = (tier == "free" and u.get("role") != "admin")
     if u.get("role") in ("cleaner", "owner_cleaner"):
-        u["profile_complete"] = bool(u.get("experience_summary")) and len(u.get("portfolio", [])) >= 10 and len(u.get("availability", [])) >= 1
+        u["docs_complete"] = bool(u.get("resume_base64")) and bool(u.get("insurance_base64"))
+        u["profile_complete"] = (bool(u.get("experience_summary")) and len(u.get("portfolio", [])) >= 10
+                                 and len(u.get("availability", [])) >= 1 and u["docs_complete"])
     else:
+        u["docs_complete"] = True
         u["profile_complete"] = True
     return u
 
@@ -193,10 +200,20 @@ TASK_ITEMS = {
     "move_out": ["Empty & wipe all cabinets/drawers", "Clean inside all appliances", "Deep scrub bathrooms & descale", "Clean inside windows & tracks", "Baseboards, doors & light switches", "Spot-clean walls & remove marks", "Vacuum & mop all floors", "Remove all trash & debris", "Final walkthrough photos"],
 }
 
-def build_checklist(clean_type: str):
+DEFAULT_PHOTO_LABELS = [p["label"] for p in PHOTO_ITEMS]
+
+async def build_checklist(clean_type: str, owner_id: Optional[str] = None):
+    task_labels = TASK_ITEMS.get(clean_type, TASK_ITEMS["standard"])
+    photo_labels = DEFAULT_PHOTO_LABELS
+    if owner_id:
+        tmpl = await db.checklist_templates.find_one({"owner_id": owner_id, "clean_type": clean_type})
+        if tmpl:
+            task_labels = tmpl.get("tasks", task_labels) or task_labels
+            photo_labels = tmpl.get("photos", photo_labels)
     tasks = [{"id": f"task_{i}", "label": t, "photo": False, "done": False, "photo_base64": None}
-             for i, t in enumerate(TASK_ITEMS.get(clean_type, TASK_ITEMS["standard"]))]
-    photos = [{**p, "done": False, "photo_base64": None} for p in PHOTO_ITEMS]
+             for i, t in enumerate(task_labels)]
+    photos = [{"id": f"photo_{i}", "label": lbl, "photo": True, "done": False, "photo_base64": None}
+              for i, lbl in enumerate(photo_labels)]
     return tasks + photos
 
 async def geocode_address(address: str):
@@ -244,6 +261,10 @@ class ProfileIn(BaseModel):
     portfolio: Optional[List[str]] = None
     availability: Optional[List[str]] = None
     availability_schedule: Optional[Dict[str, Any]] = None
+    resume_base64: Optional[str] = None
+    resume_name: Optional[str] = None
+    insurance_base64: Optional[str] = None
+    insurance_name: Optional[str] = None
     role: Optional[Literal["cleaner", "company_owner", "client", "owner_cleaner"]] = None
 
 class SubscriptionIn(BaseModel):
@@ -668,7 +689,7 @@ async def create_job(body: JobIn, user=Depends(get_current_user)):
         "status": "pending",
         "assigned_cleaners": [],
         "applicants": [],
-        "checklist": build_checklist(body.clean_type),
+        "checklist": await build_checklist(body.clean_type, user["user_id"]),
         "checked_in_at": None,
         "completed_at": None,
         "logged_hours": 0,
@@ -751,6 +772,8 @@ async def apply_job(job_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="You can only take jobs posted by your employer")
     if user["role"] in ("cleaner", "owner_cleaner") and not (user.get("experience_summary") and len(user.get("portfolio", [])) >= 10 and len(user.get("availability", [])) >= 1):
         raise HTTPException(status_code=400, detail="Complete your profile: add an experience summary, at least 10 work photos, and your availability before applying")
+    if needs_docs(user):
+        raise HTTPException(status_code=400, detail="Upload your resume and proof of insurance in your profile before taking jobs")
     ok, reason = availability_fit(user, job)
     if not ok:
         raise HTTPException(status_code=400, detail=f"You're {reason}. Update your availability to take this job.")
@@ -895,8 +918,24 @@ async def complete_job(job_id: str, user=Depends(get_current_user)):
                 checked_in = checked_in.replace(tzinfo=timezone.utc)
             hours = round((now_utc() - checked_in).total_seconds() / 3600, 2) or job.get("estimated_duration", 0)
     pay = round(hours * job.get("pay_rate", 0), 2)
+    # ---- Anomaly detection: compare against this client's usual duration for this clean type ----
+    anomaly = None
+    baseline = await db.jobs.find({
+        "poster_id": job.get("poster_id"), "clean_type": job.get("clean_type"),
+        "status": "completed", "job_id": {"$ne": job_id},
+    }).to_list(300)
+    prior = [b.get("logged_hours") for b in baseline if b.get("logged_hours")]
+    if len(prior) >= 2 and hours:
+        avg = sum(prior) / len(prior)
+        if avg > 0:
+            delta = (hours - avg) / avg
+            if abs(delta) >= 0.30:
+                anomaly = {"avg_hours": round(avg, 2), "this_hours": hours,
+                           "delta_pct": abs(round(delta * 100)),
+                           "direction": "longer" if delta > 0 else "shorter"}
     await db.jobs.update_one({"job_id": job_id}, {
         "$set": {"status": "completed", "completed_at": now_utc(), "logged_hours": hours, "logged_pay": pay,
+                 "anomaly": anomaly,
                  "tracking": False, f"cleaner_locations.{user['user_id']}.phase": "completed",
                  f"cleaner_locations.{user['user_id']}.at": now_utc()}})
     # log to hours collection
@@ -905,6 +944,8 @@ async def complete_job(job_id: str, user=Depends(get_current_user)):
         "job_title": job.get("title"), "hours": hours, "pay": pay, "date": now_utc(),
     })
     await log_activity(job, "completed", f"{job.get('title')} completed by {user['name']}")
+    if anomaly:
+        await log_activity(job, "anomaly", f"\u26a0\ufe0f {job.get('title')} took {anomaly['delta_pct']}% {anomaly['direction']} than usual ({hours}h vs {anomaly['avg_hours']}h avg)")
     updated = await db.jobs.find_one({"job_id": job_id})
     return await enrich_job(updated)
 
@@ -1415,6 +1456,8 @@ async def grab_job(job_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="You can only take jobs posted by your employer")
     if user["role"] in ("cleaner", "owner_cleaner") and not (user.get("experience_summary") and len(user.get("portfolio", [])) >= 10 and len(user.get("availability", [])) >= 1):
         raise HTTPException(status_code=400, detail="Complete your profile (experience, 10+ photos, availability) before accepting jobs")
+    if needs_docs(user):
+        raise HTTPException(status_code=400, detail="Upload your resume and proof of insurance in your profile before accepting jobs")
     if job.get("assigned_cleaners"):
         raise HTTPException(status_code=409, detail="This job was just taken by another cleaner")
     req = set(job.get("required_qualifications", []))
@@ -1604,6 +1647,96 @@ async def request_addon(job_id: str, body: AddonIn, user=Depends(get_current_use
     await db.jobs.update_one({"job_id": job_id}, {"$addToSet": {"addons": body.name}})
     await log_activity(job, "addon", f"{body.name} add-on requested for {job.get('title')}")
     return await enrich_job(await db.jobs.find_one({"job_id": job_id}))
+
+# ---------------- Owner-editable checklist templates ----------------
+CLEAN_TYPES = ["standard", "deep", "airbnb", "move_out"]
+
+class ChecklistTemplateIn(BaseModel):
+    clean_type: Literal["standard", "deep", "airbnb", "move_out"]
+    tasks: List[str]
+    photos: List[str]
+
+@api_router.get("/checklist-templates")
+async def list_checklist_templates(user=Depends(get_current_user)):
+    if user["role"] not in ("company_owner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=403, detail="Only owners can manage checklists")
+    out = {}
+    for ct in CLEAN_TYPES:
+        t = await db.checklist_templates.find_one({"owner_id": user["user_id"], "clean_type": ct})
+        if t:
+            out[ct] = {"tasks": t.get("tasks", []), "photos": t.get("photos", []), "custom": True}
+        else:
+            out[ct] = {"tasks": TASK_ITEMS.get(ct, TASK_ITEMS["standard"]),
+                       "photos": DEFAULT_PHOTO_LABELS, "custom": False}
+    return out
+
+@api_router.put("/checklist-templates")
+async def save_checklist_template(body: ChecklistTemplateIn, user=Depends(get_current_user)):
+    if user["role"] not in ("company_owner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=403, detail="Only owners can manage checklists")
+    tasks = [t.strip() for t in body.tasks if t.strip()]
+    photos = [p.strip() for p in body.photos if p.strip()]
+    if not tasks and not photos:
+        raise HTTPException(status_code=400, detail="Add at least one task or photo requirement")
+    await db.checklist_templates.update_one(
+        {"owner_id": user["user_id"], "clean_type": body.clean_type},
+        {"$set": {"owner_id": user["user_id"], "clean_type": body.clean_type,
+                  "tasks": tasks, "photos": photos, "updated_at": now_utc()}},
+        upsert=True)
+    return {"ok": True, "clean_type": body.clean_type, "tasks": tasks, "photos": photos}
+
+@api_router.delete("/checklist-templates/{clean_type}")
+async def reset_checklist_template(clean_type: str, user=Depends(get_current_user)):
+    if user["role"] not in ("company_owner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=403, detail="Only owners can manage checklists")
+    await db.checklist_templates.delete_one({"owner_id": user["user_id"], "clean_type": clean_type})
+    return {"ok": True}
+
+# ---------------- Embeddable public booking form ----------------
+class PublicBookingIn(BaseModel):
+    client_name: str
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+    address: str
+    date: str
+    clean_type: Literal["standard", "deep", "airbnb", "move_out"] = "standard"
+    notes: Optional[str] = ""
+
+@api_router.get("/public/book/{owner_id}")
+async def public_book_info(owner_id: str):
+    owner = await db.users.find_one({"user_id": owner_id})
+    if not owner or owner.get("role") not in ("company_owner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=404, detail="Business not found")
+    return {"owner_name": owner.get("name", "Our Team"), "clean_types": CLEAN_TYPES}
+
+@api_router.post("/public/book/{owner_id}")
+async def public_book_create(owner_id: str, body: PublicBookingIn):
+    owner = await db.users.find_one({"user_id": owner_id})
+    if not owner or owner.get("role") not in ("company_owner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=404, detail="Business not found")
+    job_id = f"job_{uuid.uuid4().hex[:12]}"
+    coords = await geocode_address(body.address)
+    label = body.clean_type.replace("_", " ").title()
+    doc = {
+        "job_id": job_id, "poster_id": owner_id, "poster_name": owner.get("name", ""),
+        "poster_role": owner.get("role", "company_owner"),
+        "title": f"{label} clean — {body.client_name}",
+        "clean_type": body.clean_type, "address": body.address,
+        "latitude": coords[0] if coords else 0, "longitude": coords[1] if coords else 0,
+        "date": body.date, "start_window_from": "09:00", "start_window_to": "17:00",
+        "estimated_duration": 2, "client_name": body.client_name,
+        "client_notes": body.notes or "", "manager_notes": "",
+        "client_contact": {"email": body.email or "", "phone": body.phone or ""},
+        "required_qualifications": [], "pay_rate": 0,
+        "status": "pending", "assigned_cleaners": [], "applicants": [],
+        "checklist": await build_checklist(body.clean_type, owner_id),
+        "source": "booking_form",
+        "checked_in_at": None, "completed_at": None, "logged_hours": 0,
+        "created_at": now_utc(),
+    }
+    await db.jobs.insert_one(doc)
+    await log_activity(doc, "booking", f"New online booking from {body.client_name} ({label})")
+    return {"ok": True, "message": "Booking received! The team will reach out to confirm shortly."}
 
 app.include_router(api_router)
 app.add_middleware(
