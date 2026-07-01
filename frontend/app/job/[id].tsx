@@ -298,7 +298,7 @@ export default function JobDetail() {
         {isPoster && (job.status === "pending" || job.status === "in_progress") && (
           <Button title="Assign a Cleaner" icon="person-add" variant={canApply && !isAssigned && job.status === "pending" ? "outline" : "primary"} onPress={openAssign} testID="assign-cleaner-button" />
         )}
-        {isPoster && canApply && (job.status === "pending" || job.status === "in_progress") && !job.assigned_cleaners?.includes(user?.user_id) && (
+        {isPoster && (job.status === "pending" || job.status === "in_progress") && !job.assigned_cleaners?.includes(user?.user_id) && (
           <Button title="Assign to Me" icon="person" variant="ghost" onPress={assignSelf} loading={busy} testID="assign-self-button" />
         )}
         {isAssigned && job.status === "pending" && myResp !== "accepted" && (
