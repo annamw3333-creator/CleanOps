@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   roleText: { fontSize: 12, fontWeight: "800", color: colors.onGold, textTransform: "capitalize" },
   subCard: { backgroundColor: colors.surfaceInverse },
   subTitle: { fontSize: 15, fontWeight: "700", color: colors.onSurfaceInverse },
-  subSub: { fontSize: 12, color: "#ffffffaa" },
+  subSub: { fontSize: 12, color: "#4A5568" },
   tierIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   section: { fontSize: 17, fontWeight: "700", color: colors.onSurface },
   hint: { fontSize: 12.5, color: colors.muted },
