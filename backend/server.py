@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Header
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Header, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -243,6 +243,38 @@ def clean(doc: dict) -> dict:
     doc.pop("password_hash", None)
     return doc
 
+# ---------------- Simple in-memory rate limiting & upload caps ----------------
+from collections import defaultdict
+_rate_buckets: dict = defaultdict(list)
+
+def rate_limit(key: str, limit: int, window_sec: int) -> bool:
+    """Sliding-window limiter. Returns False when the key has exceeded `limit` hits in `window_sec`."""
+    now = datetime.now(timezone.utc).timestamp()
+    bucket = _rate_buckets[key]
+    cutoff = now - window_sec
+    while bucket and bucket[0] < cutoff:
+        bucket.pop(0)
+    if len(bucket) >= limit:
+        return False
+    bucket.append(now)
+    return True
+
+def client_ip(request: Optional[Request]) -> str:
+    if not request:
+        return "unknown"
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+# Cap a single base64 field (~8M chars ≈ 6MB decoded) to prevent DB-bloat DoS.
+MAX_DOC_CHARS = 8_000_000
+def _too_big(val) -> bool:
+    return isinstance(val, str) and len(val) > MAX_DOC_CHARS
+
+PRIVILEGED_PROFILE_FIELDS = {"role", "tier", "account_origin", "employer_id", "founding_member",
+                             "user_id", "email", "password_hash", "avg_rating", "review_count"}
+
 # ---------------- Checklist templates ----------------
 PHOTO_ITEMS = [
     {"id": "under_sink", "label": "Under kitchen sink", "photo": True},
@@ -325,7 +357,6 @@ class ProfileIn(BaseModel):
     insurance_name: Optional[str] = None
     company_color: Optional[str] = None
     company_name: Optional[str] = None
-    role: Optional[Literal["cleaner", "company_owner", "client", "owner_cleaner"]] = None
 
 class SubscriptionIn(BaseModel):
     tier: Literal["free", "founding", "professional", "enterprise"]
@@ -398,7 +429,9 @@ async def create_session(user_id: str, token: Optional[str] = None) -> str:
 
 # ---------------- Auth routes ----------------
 @api_router.post("/auth/register")
-async def register(body: RegisterIn):
+async def register(body: RegisterIn, request: Request):
+    if not rate_limit(f"register:{client_ip(request)}", limit=8, window_sec=3600):
+        raise HTTPException(status_code=429, detail="Too many sign-up attempts. Please try again later.")
     if await db.users.find_one({"email": body.email.lower()}):
         raise HTTPException(status_code=409, detail="Email already registered")
     user_id = f"user_{uuid.uuid4().hex[:12]}"
@@ -421,7 +454,9 @@ async def register(body: RegisterIn):
     return {"token": token, "user": with_perks(clean(dict(doc)))}
 
 @api_router.post("/auth/login")
-async def login(body: LoginIn):
+async def login(body: LoginIn, request: Request):
+    if not rate_limit(f"login:{client_ip(request)}", limit=10, window_sec=300):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please wait a minute and try again.")
     user = await db.users.find_one({"email": body.email.lower()})
     if not user or not user.get("password_hash") or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
@@ -477,7 +512,14 @@ async def me(user=Depends(get_current_user)):
 
 @api_router.post("/subscription/upgrade")
 async def upgrade_subscription(body: SubscriptionIn, user=Depends(get_current_user)):
-    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"tier": body.tier}})
+    # Paid tiers may ONLY be granted through the verified Stripe checkout flow (see /billing/*).
+    # This endpoint is limited to self-service cancellation (downgrade to free).
+    if body.tier != "free" and user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Paid plans are activated through secure checkout")
+    updates = {"tier": body.tier}
+    if body.tier == "free":
+        updates["founding_member"] = False
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})
     updated = await db.users.find_one({"user_id": user["user_id"]})
     return {"user": with_perks(clean(dict(updated)))}
 
@@ -663,9 +705,15 @@ async def logout(authorization: Optional[str] = Header(None)):
 
 @api_router.put("/profile")
 async def update_profile(body: ProfileIn, user=Depends(get_current_user)):
-    updates = {k: v for k, v in body.dict().items() if v is not None}
-    if "portfolio" in updates and len(updates["portfolio"]) > 25:
-        raise HTTPException(status_code=400, detail="You can upload at most 25 photos")
+    updates = {k: v for k, v in body.dict().items() if v is not None and k not in PRIVILEGED_PROFILE_FIELDS}
+    for f in ("resume_base64", "insurance_base64", "avatar"):
+        if _too_big(updates.get(f)):
+            raise HTTPException(status_code=413, detail="That file is too large (max ~6MB). Please upload a smaller file.")
+    if "portfolio" in updates:
+        if len(updates["portfolio"]) > 25:
+            raise HTTPException(status_code=400, detail="You can upload at most 25 photos")
+        if any(_too_big(p) for p in updates["portfolio"]):
+            raise HTTPException(status_code=413, detail="One of those photos is too large (max ~6MB each).")
     if body.availability_schedule is not None:
         # keep day-level availability in sync with the detailed schedule (days that have any availability)
         updates["availability"] = list(body.availability_schedule.keys())
@@ -698,7 +746,7 @@ async def get_public_user(user_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="User not found")
     return {
         "user_id": u["user_id"], "name": u["name"], "role": u["role"], "avatar": u.get("avatar", ""),
-        "phone": u.get("phone", ""), "bio": u.get("bio", ""), "experience_summary": u.get("experience_summary", ""),
+        "bio": u.get("bio", ""), "experience_summary": u.get("experience_summary", ""),
         "portfolio": u.get("portfolio", []), "qualifications": u.get("qualifications", []),
         "hourly_rate": u.get("hourly_rate", 0), "availability": u.get("availability", []),
         "availability_schedule": u.get("availability_schedule", {}),
@@ -1196,12 +1244,18 @@ async def create_conversation(body: ConversationIn, user=Depends(get_current_use
 
 @api_router.get("/conversations/{conv_id}/messages")
 async def get_messages(conv_id: str, user=Depends(get_current_user)):
+    conv = await db.conversations.find_one({"conv_id": conv_id})
+    if not conv or user["user_id"] not in conv.get("participants", []):
+        raise HTTPException(status_code=403, detail="Not a participant in this conversation")
     msgs = await db.messages.find({"conv_id": conv_id}).sort("created_at", 1).to_list(500)
     return [{"message_id": m["message_id"], "conv_id": m["conv_id"], "sender_id": m["sender_id"],
              "text": m["text"], "created_at": iso(m["created_at"])} for m in msgs]
 
 @api_router.post("/conversations/{conv_id}/messages")
 async def send_message(conv_id: str, body: MessageIn, user=Depends(get_current_user)):
+    conv = await db.conversations.find_one({"conv_id": conv_id})
+    if not conv or user["user_id"] not in conv.get("participants", []):
+        raise HTTPException(status_code=403, detail="Not a participant in this conversation")
     msg_id = f"msg_{uuid.uuid4().hex[:10]}"
     doc = {"message_id": msg_id, "conv_id": conv_id, "sender_id": user["user_id"],
            "text": body.text, "created_at": now_utc()}
@@ -1831,7 +1885,9 @@ async def public_book_info(owner_id: str):
     return {"owner_name": owner.get("name", "Our Team"), "clean_types": CLEAN_TYPES}
 
 @api_router.post("/public/book/{owner_id}")
-async def public_book_create(owner_id: str, body: PublicBookingIn):
+async def public_book_create(owner_id: str, body: PublicBookingIn, request: Request):
+    if not rate_limit(f"book:{client_ip(request)}", limit=5, window_sec=600):
+        raise HTTPException(status_code=429, detail="Too many booking requests. Please try again shortly.")
     owner = await db.users.find_one({"user_id": owner_id})
     if not owner or owner.get("role") not in ("company_owner", "owner_cleaner", "admin"):
         raise HTTPException(status_code=404, detail="Business not found")
@@ -1874,6 +1930,8 @@ async def twilio_status(user=Depends(get_current_user)):
 async def twilio_test(body: SmsTestIn, user=Depends(get_current_user)):
     if user["role"] not in ("company_owner", "owner_cleaner", "admin"):
         raise HTTPException(status_code=403, detail="Only owners can send test messages")
+    if not rate_limit(f"smstest:{user['user_id']}", limit=5, window_sec=3600):
+        raise HTTPException(status_code=429, detail="Too many test messages. Please try again later.")
     res = await send_sms(body.to, f"CleanOps test message — SMS is working for {user.get('name','your team')}! \U0001F9F9")
     if not res.get("sent"):
         reason = res.get("reason", "unknown")
@@ -1885,7 +1943,7 @@ async def twilio_test(body: SmsTestIn, user=Depends(get_current_user)):
 app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
