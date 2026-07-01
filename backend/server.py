@@ -207,6 +207,16 @@ async def users_map(ids: list) -> dict:
     docs = await db.users.find({"user_id": {"$in": ids}}).to_list(len(ids) + 10)
     return {u["user_id"]: u for u in docs}
 
+COMPANY_PALETTE = ["#1A5F7A", "#2B7043", "#D4AF37", "#9C5FB5", "#C1666B", "#3A7CA5", "#E08A3C", "#4D9078"]
+
+def company_color(poster_id: Optional[str], custom: Optional[str] = None) -> str:
+    """Owner-picked brand color, else a stable auto color derived from the poster id."""
+    if custom:
+        return custom
+    if not poster_id:
+        return COMPANY_PALETTE[0]
+    return COMPANY_PALETTE[sum(ord(c) for c in poster_id) % len(COMPANY_PALETTE)]
+
 # ---------------- Helpers ----------------
 def now_utc():
     return datetime.now(timezone.utc)
@@ -313,6 +323,8 @@ class ProfileIn(BaseModel):
     resume_name: Optional[str] = None
     insurance_base64: Optional[str] = None
     insurance_name: Optional[str] = None
+    company_color: Optional[str] = None
+    company_name: Optional[str] = None
     role: Optional[Literal["cleaner", "company_owner", "client", "owner_cleaner"]] = None
 
 class SubscriptionIn(BaseModel):
@@ -719,7 +731,10 @@ async def enrich_job(job: dict):
     job = clean(dict(job))
     job.pop("cleaner_locations", None)  # live locations are private; exposed only via /fleet/live to the poster
     cids = job.get("assigned_cleaners", [])
-    umap = await users_map(cids)
+    umap = await users_map(cids + [job.get("poster_id")])
+    poster = umap.get(job.get("poster_id"))
+    job["company_color"] = company_color(job.get("poster_id"), poster.get("company_color") if poster else None)
+    job["company_name"] = (poster.get("company_name") or poster.get("name")) if poster else job.get("poster_name")
     counts = await completed_counts(cids)
     assigned = []
     for cid in cids:

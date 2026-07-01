@@ -1,0 +1,40 @@
+{
+  "summary": "Group C (Dark theme + Ops hub + Multi-company color coding) tested end-to-end. Backend: 8/8 pytest in test_group_c_theme_ops_color.py PASS — PUT /api/profile persists company_color+company_name and returns updated user, empty string clears back to auto palette, GET /api/jobs returns company_color+company_name on every job, custom color overrides palette for that owner's jobs, cleared color reverts to a stable palette color (COMPANY_PALETTE[sum(ord(c)) % 8] per poster_id) — deterministic and stable, job creation regression works with color enrichment (POST /api/jobs -> immediate GET both show company_color), no mongo _id leaks. Frontend: owner dashboard shows single 'Ops Management Tools' card (testID ops-hub-card) and ALL legacy owner cards absent (booking-form-card, checklist-templates-card, clients-card, sms-settings-card, teams-card, operations-card, live-map-card, reconcile-card confirmed missing). /ops-hub renders all 12 grouped tool rows (hub-operations, hub-live-map, hub-reconcile, hub-booking-form, hub-checklist-templates, hub-sms-settings, hub-onboarding, hub-teams, hub-clients, hub-payroll, hub-appearance, hub-subscription); each row navigates without red-screen crashes. /appearance shows 10 swatches; picking swatch-#2B7043 + tapping save-appearance calls PUT /api/profile with company_color and after return-to-dashboard the first job card's borderLeftColor becomes rgb(43,112,67) (=#2B7043) with borderLeftWidth 4px (enrich_job feeding through). Dark theme: colors.surface=#0E1420 applied via _layout.tsx Stack contentStyle + root View; light onSurface=#EAECEF text; dashboard, ops-hub, appearance, work-hub, jobs list, profile, all sub-screens (operations, live-map, reconcile, booking-form, checklist-templates, sms-settings, clients, teams, subscription) all render in dark palette in screenshots — no white flashes, no dark-on-dark text, teal/gold/green accents preserved. Cleaner dashboard regression (cleaner@abodeops.com): driver-card, onboarding-card, clients-card, payroll-card, availability-card all present; ops-hub-card absent — spec matches. Owner company_color/company_name restored to empty on teardown so state is reset for next iteration.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Profile (cleaner)", "issues": ["'FREE Plan' banner card (top of Profile) uses sage background with a low-contrast dark subtitle — subtitle 'Ad-supported · tap to go ad-free' is barely legible on the sage tile in dark theme. Consider using colors.onSage (#0A192F) with higher weight, or swap to surfaceSecondary + colors.onSurface for the sage-branded promo banner."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_group_c_theme_ops_color.py",
+    "/app/test_reports/pytest/group_c_results.xml"
+  ],
+  "action_items": [
+    "Optional polish: bump the 'FREE Plan' promo card subtitle contrast on the Profile screen (subtitle text on sage background reads faintly in dark theme).",
+    "No functional fixes required for Group C — dark theme, Ops Hub, and company-color coding all working as specified."
+  ],
+  "critical_code_review_comments": [
+    "backend/server.py:210-218 company_color() palette+hash is deterministic and safe (empty string is falsy so custom='' correctly falls back to auto — verified by test_clear_company_color_falls_back and test_auto_color_used_when_empty).",
+    "backend/server.py:666 ProfileIn.dict() drops None but keeps empty string, so '' persists as the stored company_color and enrich_job's `poster.get('company_color')` returns '' → company_color() treats it as falsy and uses auto palette. Contract holds.",
+    "backend/server.py:730-737 enrich_job attaches company_color + company_name to every job on every read path (list, detail, assign, unassign, enroute, complete, etc.). Verified via TestJobsEnrichment.",
+    "frontend/app/(tabs)/index.tsx:78-88 owner branch renders single ops-hub-card; JobRow at line 176 uses `borderLeftColor: job.company_color || colors.brand` — verified live (rgb(43,112,67) after saving #2B7043).",
+    "frontend/app/_layout.tsx:32-35 root View backgroundColor=colors.surface + Stack contentStyle backgroundColor=colors.surface prevents white flash between navigations — validated across 9 sub-screens.",
+    "frontend/app/ops-hub.tsx enumerates 12 tools across 4 headings, each Pressable has proper testID and router.push route. No dead links found."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_group_c_theme_ops_color.py (new — 8 pytest classes/tests, all pass)",
+    "/app/test_reports/pytest/group_c_results.xml (junit report)"
+  ],
+  "success_rate": {"backend": "8/8 (100%) Group C tests pass", "frontend": "12/12 ops-hub rows present + navigable, 10/10 appearance swatches render, save-appearance -> job card left border reflects saved color, cleaner dashboard cards all present, no ops-hub-card leak to cleaner"},
+  "seed_data_creation": "Test job TEST_GROUPC_JOB_* is deleted in the same test. Owner company_color/company_name were reset to '' at teardown so next iteration sees the same auto-palette default for owner@abodeops.com.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Group C is green. Regression suite: run `cd /app && python -m pytest backend/tests/test_group_c_theme_ops_color.py -v`. If a future change alters the COMPANY_PALETTE list order or the hash function in server.py:212, TestJobsEnrichment.test_auto_color_used_when_empty will need updated expected values (it recomputes expected color from PALETTE constant so keep PALETTE list in the test in sync)."
+}

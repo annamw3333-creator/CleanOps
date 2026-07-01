@@ -1,12 +1,12 @@
 import { Platform } from "react-native";
 
 export const colors = {
-  surface: "#F8F7F4",
-  onSurface: "#0A192F",
-  surfaceSecondary: "#FFFFFF",
-  surfaceTertiary: "#EAE7DF",
-  surfaceInverse: "#0A192F",
-  onSurfaceInverse: "#F8F7F4",
+  surface: "#0E1420",
+  onSurface: "#EAECEF",
+  surfaceSecondary: "#182231",
+  surfaceTertiary: "#232F42",
+  surfaceInverse: "#EAECEF",
+  onSurfaceInverse: "#0A192F",
   brand: "#1A5F7A",
   onBrand: "#FFFFFF",
   gold: "#D4AF37",
@@ -17,10 +17,10 @@ export const colors = {
   success: "#2B7043",
   warning: "#D4AF37",
   error: "#D64045",
-  border: "#D5D0C4",
-  borderStrong: "#A39E93",
-  divider: "#EAE7DF",
-  muted: "#6B7280",
+  border: "#2C3849",
+  borderStrong: "#3E4C5F",
+  divider: "#232F42",
+  muted: "#9AA5B4",
 };
 
 export const statusColors = {

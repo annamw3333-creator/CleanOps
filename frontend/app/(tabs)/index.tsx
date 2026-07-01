@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const isCleaner = user?.role === "cleaner";
+  const isOwner = user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin";
 
   const load = useCallback(async () => {
     try {
@@ -73,105 +74,54 @@ export default function Dashboard() {
           <Button title="Create Job" icon="add-circle-outline" onPress={() => router.push("/post-job")} testID="post-job-button" />
         )}
 
-        {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
-          <Card onPress={() => router.push("/operations")} testID="operations-card"
-            style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceInverse, borderColor: colors.surfaceInverse }}>
-            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#ffffff22", alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="speedometer-outline" size={22} color={colors.gold} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: colors.onSurfaceInverse }}>Command Center</Text>
-              <Text style={{ fontSize: 12.5, color: "#ffffff99" }}>Assign, start, complete & manage all jobs</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#ffffff99" />
-          </Card>
-        )}
-
-        <Card onPress={() => router.push("/onboarding")} testID="onboarding-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="school-outline" size={20} color={colors.brand} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>{isCleaner ? "Onboarding & Training" : "Onboarding Builder"}</Text>
-            <Text style={{ fontSize: 12, color: colors.muted }}>{isCleaner ? "Complete SOPs & quizzes" : "Create SOP docs & quizzes"}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-        </Card>
-
-        {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
-          <Card onPress={() => router.push("/live-map")} testID="live-map-card"
+        {isOwner ? (
+          <Card onPress={() => router.push("/ops-hub")} testID="ops-hub-card"
             style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.brand, borderColor: colors.brand }}>
-            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: "#ffffff22", alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="location-outline" size={22} color="#fff" />
+            <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: "#ffffff22", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="grid-outline" size={24} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#fff" }}>Live Crew Map</Text>
-              <Text style={{ fontSize: 12.5, color: "#ffffffcc" }}>Track cleaners' live locations on active jobs</Text>
+              <Text style={{ fontSize: 17, fontWeight: "800", color: "#fff" }}>Ops Management Tools</Text>
+              <Text style={{ fontSize: 12.5, color: "#ffffffcc" }}>Command center, map, booking form, checklists, texts & more</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#ffffffcc" />
+            <Ionicons name="chevron-forward" size={22} color="#ffffffcc" />
           </Card>
+        ) : (
+          <>
+            <Card onPress={() => router.push("/onboarding")} testID="onboarding-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+              <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="school-outline" size={20} color={colors.brand} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Onboarding & Training</Text>
+                <Text style={{ fontSize: 12, color: colors.muted }}>Complete SOPs & quizzes</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </Card>
+
+            <Card onPress={() => router.push("/clients")} testID="clients-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+              <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="people-outline" size={20} color={colors.brand} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Client List</Text>
+                <Text style={{ fontSize: 12, color: colors.muted }}>Companies, contacts & notes</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </Card>
+
+            <Card onPress={() => router.push(`/employee/${user?.user_id}`)} testID="payroll-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+              <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="calculator-outline" size={20} color={colors.brand} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Pay & Tax Calculator</Text>
+                <Text style={{ fontSize: 12, color: colors.muted }}>Estimate pay stubs & deductions (Canada 2026)</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </Card>
+          </>
         )}
-
-        {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
-          <Card onPress={() => router.push("/booking-form")} testID="booking-form-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="code-slash-outline" size={20} color={colors.brand} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Booking Form</Text>
-              <Text style={{ fontSize: 12, color: colors.muted }}>Embeddable form for your website</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-          </Card>
-        )}
-
-        {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
-          <Card onPress={() => router.push("/checklist-templates")} testID="checklist-templates-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="list-outline" size={20} color={colors.brand} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Checklist Templates</Text>
-              <Text style={{ fontSize: 12, color: colors.muted }}>Customize tasks & required photos per clean</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-          </Card>
-        )}
-
-        {(user?.role === "company_owner" || user?.role === "owner_cleaner" || user?.role === "admin") && (
-          <Card onPress={() => router.push("/sms-settings")} testID="sms-settings-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="chatbubbles-outline" size={20} color={colors.brand} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Text Notifications</Text>
-              <Text style={{ fontSize: 12, color: colors.muted }}>Client on-the-way, feedback & cleaner reminders</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-          </Card>
-        )}
-
-        <Card onPress={() => router.push("/clients")} testID="clients-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="people-outline" size={20} color={colors.brand} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Client List</Text>
-            <Text style={{ fontSize: 12, color: colors.muted }}>{isCleaner ? "Companies, contacts & notes" : "Clients, frequency, cleaners & notes"}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-        </Card>
-
-        <Card onPress={() => router.push(`/employee/${user?.user_id}`)} testID="payroll-card" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: colors.sage, alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="calculator-outline" size={20} color={colors.brand} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface }}>Pay & Tax Calculator</Text>
-            <Text style={{ fontSize: 12, color: colors.muted }}>Estimate pay stubs & deductions (Canada 2026)</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-        </Card>
 
         {isCleaner && (
           <Card onPress={() => router.push("/availability")} testID="availability-card" style={{ gap: spacing.sm }}>
@@ -223,7 +173,7 @@ function StatCard({ icon, label, value, color }: any) {
 
 export function JobRow({ job, onPress }: { job: any; onPress: () => void }) {
   return (
-    <Card onPress={onPress} testID={`job-card-${job.job_id}`} style={{ gap: spacing.sm }}>
+    <Card onPress={onPress} testID={`job-card-${job.job_id}`} style={{ gap: spacing.sm, borderLeftWidth: 4, borderLeftColor: job.company_color || colors.brand }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
         <View style={{ flex: 1, marginRight: spacing.sm }}>
           <Text style={styles.jobTitle}>{job.title}</Text>
