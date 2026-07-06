@@ -763,6 +763,10 @@ async def update_profile(body: ProfileIn, user=Depends(get_current_user)):
     for f in ("resume_base64", "insurance_base64", "avatar", "company_logo"):
         if _too_big(updates.get(f)):
             raise HTTPException(status_code=413, detail="That file is too large (max ~6MB). Please upload a smaller file.")
+    if updates.get("company_logo") and not str(updates["company_logo"]).startswith("data:image/"):
+        raise HTTPException(status_code=400, detail="Logo must be an image")
+    if isinstance(updates.get("company_name"), str) and len(updates["company_name"]) > 120:
+        updates["company_name"] = updates["company_name"][:120]
     if "portfolio" in updates:
         if len(updates["portfolio"]) > 25:
             raise HTTPException(status_code=400, detail="You can upload at most 25 photos")
@@ -2043,17 +2047,16 @@ class SmsTestIn(BaseModel):
 async def reset_sample_data(user=Depends(get_current_user)):
     if user["role"] not in ("company_owner", "owner_cleaner", "admin"):
         raise HTTPException(status_code=403, detail="Only owners can clear sample data")
-    jobs_res = await db.jobs.delete_many({"demo": True})
-    await db.hours_log.delete_many({"demo": True})
-    await db.activity.delete_many({"demo": True})
-    try:
-        await db.clients.delete_many({"demo": True})
-    except Exception:
-        pass
-    demo_emails = ["owner@abodeops.com", "cleaner@abodeops.com", "client@abodeops.com"]
-    ppl = await db.users.delete_many({"email": {"$in": demo_emails}, "user_id": {"$ne": user["user_id"]}})
-    await audit(user, "reset_sample_data", f"jobs={jobs_res.deleted_count}, people={ppl.deleted_count}")
-    return {"ok": True, "jobs_removed": jobs_res.deleted_count, "people_removed": ppl.deleted_count}
+    # Scope strictly to THIS owner's own demo-seeded jobs — never touch shared demo
+    # accounts or other companies' data (keeps the guest/demo experience intact for everyone).
+    demo_jobs = await db.jobs.find({"demo": True, "poster_id": user["user_id"]}, {"job_id": 1}).to_list(2000)
+    ids = [j["job_id"] for j in demo_jobs]
+    jobs_res = await db.jobs.delete_many({"demo": True, "poster_id": user["user_id"]})
+    if ids:
+        await db.hours_log.delete_many({"job_id": {"$in": ids}})
+        await db.activity.delete_many({"job_id": {"$in": ids}})
+    await audit(user, "reset_sample_data", f"jobs={jobs_res.deleted_count}")
+    return {"ok": True, "jobs_removed": jobs_res.deleted_count, "people_removed": 0}
 
 @api_router.get("/audit-log")
 async def get_audit_log(user=Depends(get_current_user)):

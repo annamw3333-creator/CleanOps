@@ -47,6 +47,7 @@ async def main():
 
     today = datetime.now(timezone.utc)
     base_lat, base_lng = 51.0447, -114.0719  # Calgary downtown
+    std_checklist = await build_checklist("standard")
 
     def mk_job(i, title, client_name, lat, lng, status, assigned, days_offset):
         d = (today + timedelta(days=days_offset)).strftime("%Y-%m-%d")
@@ -58,7 +59,7 @@ async def main():
             "estimated_duration": 3, "client_name": client_name, "client_notes": "Gate code 1234. Friendly dog.",
             "manager_notes": "", "required_qualifications": [], "pay_rate": 30,
             "status": status, "assigned_cleaners": assigned, "applicants": [],
-            "checklist": build_checklist("standard"), "checked_in_at": None,
+            "checklist": [dict(x) for x in std_checklist], "checked_in_at": None,
             "completed_at": today if status == "completed" else None,
             "logged_hours": 3 if status == "completed" else 0,
             "logged_pay": 90 if status == "completed" else 0,
