@@ -8,6 +8,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/AuthContext";
+import { ThemeProvider, useTheme } from "@/src/ThemeContext";
 import DemoBanner from "@/src/components/DemoBanner";
 import { colors } from "@/src/theme";
 

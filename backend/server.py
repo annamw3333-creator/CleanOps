@@ -148,6 +148,8 @@ def with_perks(u: dict) -> dict:
     else:
         u["docs_complete"] = True
         u["profile_complete"] = True
+    u["theme_accent"] = u.get("company_color") or "#1A5F7A"
+    u["company_logo"] = u.get("company_logo", "")
     return u
 
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -394,6 +396,7 @@ class ProfileIn(BaseModel):
     insurance_name: Optional[str] = None
     company_color: Optional[str] = None
     company_name: Optional[str] = None
+    company_logo: Optional[str] = None
 
 class SubscriptionIn(BaseModel):
     tier: Literal["free", "founding", "professional", "enterprise"]
@@ -434,6 +437,7 @@ class TeamIn(BaseModel):
 
 class TeamMemberIn(BaseModel):
     cleaner_id: str
+    reason: Optional[str] = None
 
 # ---------------- Auth dependency ----------------
 async def get_current_user(authorization: Optional[str] = Header(None)):
@@ -550,7 +554,14 @@ async def guest_login():
 @api_router.get("/auth/me")
 async def me(user=Depends(get_current_user)):
     user = await ensure_admin(user)
-    return {"user": with_perks(clean(dict(user)))}
+    out = with_perks(clean(dict(user)))
+    # Cleaners inherit their employer's brand (accent + logo) so the whole company matches.
+    if out.get("role") == "cleaner" and out.get("employer_id"):
+        emp = await db.users.find_one({"user_id": out["employer_id"]})
+        if emp:
+            out["theme_accent"] = emp.get("company_color") or out["theme_accent"]
+            out["company_logo"] = emp.get("company_logo") or out.get("company_logo", "")
+    return {"user": out}
 
 @api_router.post("/subscription/upgrade")
 async def upgrade_subscription(body: SubscriptionIn, user=Depends(get_current_user)):
@@ -749,7 +760,7 @@ async def logout(authorization: Optional[str] = Header(None)):
 @api_router.put("/profile")
 async def update_profile(body: ProfileIn, user=Depends(get_current_user)):
     updates = {k: v for k, v in body.dict().items() if v is not None and k not in PRIVILEGED_PROFILE_FIELDS}
-    for f in ("resume_base64", "insurance_base64", "avatar"):
+    for f in ("resume_base64", "insurance_base64", "avatar", "company_logo"):
         if _too_big(updates.get(f)):
             raise HTTPException(status_code=413, detail="That file is too large (max ~6MB). Please upload a smaller file.")
     if "portfolio" in updates:
@@ -1012,6 +1023,61 @@ async def unassign_job(job_id: str, body: TeamMemberIn, user=Depends(get_current
         raise HTTPException(status_code=403, detail="Not authorized")
     await db.jobs.update_one({"job_id": job_id}, {"$pull": {"assigned_cleaners": body.cleaner_id}})
     updated = await db.jobs.find_one({"job_id": job_id})
+    umap = await users_map([body.cleaner_id])
+    who = (umap.get(body.cleaner_id) or {}).get("name", "A cleaner")
+    reason = (body.reason or "").strip()
+    # If no cleaners remain and the job isn't done/cancelled, send it back to "needs a cleaner".
+    reverted = False
+    if not updated.get("assigned_cleaners") and updated.get("status") in ("pending", "in_progress"):
+        await db.jobs.update_one({"job_id": job_id}, {"$set": {"status": "pending"}})
+        reverted = True
+        updated["status"] = "pending"
+    await log_activity(updated, "unassigned", f"{who} removed from {job.get('title')}" + (f" ({reason})" if reason else ""))
+    out = await enrich_job(updated)
+    out["reverted_to_pending"] = reverted
+    return out
+
+class AdjustHoursIn(BaseModel):
+    hours: Optional[float] = None
+    start_time: Optional[str] = None  # "HH:MM"
+    end_time: Optional[str] = None    # "HH:MM"
+
+@api_router.post("/jobs/{job_id}/adjust-hours")
+async def adjust_hours(job_id: str, body: AdjustHoursIn, user=Depends(get_current_user)):
+    job = await db.jobs.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["poster_id"] != user["user_id"] and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the job owner can adjust worked time")
+    hours = body.hours
+    checked_in = None
+    completed = None
+    if hours is None and body.start_time and body.end_time:
+        try:
+            d = (job.get("date") or now_utc().strftime("%Y-%m-%d"))[:10]
+            s = datetime.strptime(f"{d} {body.start_time}", "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+            e = datetime.strptime(f"{d} {body.end_time}", "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+            if e <= s:
+                raise HTTPException(status_code=400, detail="End time must be after start time")
+            hours = round((e - s).total_seconds() / 3600, 2)
+            checked_in, completed = s, e
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=400, detail="Use times like 09:00 and 13:30")
+    if hours is None or hours < 0 or hours > 24:
+        raise HTTPException(status_code=400, detail="Enter valid hours (0–24) or a start & end time")
+    hours = round(float(hours), 2)
+    pay = round(hours * job.get("pay_rate", 0), 2)
+    updates = {"logged_hours": hours, "logged_pay": pay, "status": "completed",
+               "hours_adjusted": True}
+    if not job.get("completed_at"):
+        updates["completed_at"] = completed or now_utc()
+    if checked_in and not job.get("checked_in_at"):
+        updates["checked_in_at"] = checked_in
+    await db.jobs.update_one({"job_id": job_id}, {"$set": updates})
+    updated = await db.jobs.find_one({"job_id": job_id})
+    await log_activity(updated, "completed", f"{user['name']} set worked time to {hours}h on {job.get('title')}")
     return await enrich_job(updated)
 
 @api_router.post("/jobs/{job_id}/assign-self")
