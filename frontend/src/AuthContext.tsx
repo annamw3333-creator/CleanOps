@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { api, setToken, clearToken, getToken, getGuestFlag, setGuestFlag, clearGuestFlag } from "@/src/api";
+import { useTheme } from "@/src/ThemeContext";
 
 type User = {
   user_id: string;
@@ -24,6 +25,10 @@ type User = {
   availability?: string[];
   profile_complete?: boolean;
   completed_count?: number;
+  theme_accent?: string;
+  company_color?: string;
+  company_name?: string;
+  company_logo?: string;
 };
 
 type AuthCtx = {
@@ -46,6 +51,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
+  const { setAccent } = useTheme();
+  useEffect(() => { setAccent(user?.theme_accent); }, [user?.theme_accent]);
 
   const refresh = useCallback(async () => {
     const token = await getToken();

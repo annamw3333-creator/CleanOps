@@ -29,32 +29,41 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <View style={{ flex: 1, backgroundColor: colors.surface }}>
-            <StatusBar style="light" />
-            <DemoBanner />
-            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="auth" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="job/[id]" />
-            <Stack.Screen name="chat/[id]" />
-            <Stack.Screen name="post-job" options={{ presentation: "modal" }} />
-            <Stack.Screen name="employee/[id]" />
-            <Stack.Screen name="onboarding" />
-            <Stack.Screen name="feedback/[token]" />
-            <Stack.Screen name="subscription" options={{ presentation: "modal" }} />
-            <Stack.Screen name="teams" />
-            <Stack.Screen name="operations" />
-            <Stack.Screen name="clients" />
-            <Stack.Screen name="driver" />
-            <Stack.Screen name="live-map" />
-            <Stack.Screen name="reconcile" />
-            <Stack.Screen name="availability" />
-          </Stack>
-          </View>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <ThemedShell />
+          </AuthProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+function ThemedShell() {
+  const { accent } = useTheme();
+  return (
+    <View key={accent} style={{ flex: 1, backgroundColor: colors.surface }}>
+      <StatusBar style="light" />
+      <DemoBanner />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="auth" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="job/[id]" />
+        <Stack.Screen name="chat/[id]" />
+        <Stack.Screen name="post-job" options={{ presentation: "modal" }} />
+        <Stack.Screen name="employee/[id]" />
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="feedback/[token]" />
+        <Stack.Screen name="subscription" options={{ presentation: "modal" }} />
+        <Stack.Screen name="teams" />
+        <Stack.Screen name="operations" />
+        <Stack.Screen name="clients" />
+        <Stack.Screen name="driver" />
+        <Stack.Screen name="live-map" />
+        <Stack.Screen name="reconcile" />
+        <Stack.Screen name="availability" />
+      </Stack>
+    </View>
   );
 }

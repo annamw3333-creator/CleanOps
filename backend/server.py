@@ -899,6 +899,7 @@ async def create_job(body: JobIn, user=Depends(get_current_user)):
         "assigned_cleaners": [],
         "applicants": [],
         "checklist": await build_checklist(body.clean_type, user["user_id"]),
+        "checklist_mandatory": await checklist_mandatory_for(body.clean_type, user["user_id"]),
         "checked_in_at": None,
         "completed_at": None,
         "logged_hours": 0,
@@ -1173,7 +1174,7 @@ async def complete_job(job_id: str, user=Depends(get_current_user)):
     if not job or user["user_id"] not in job.get("assigned_cleaners", []):
         raise HTTPException(status_code=403, detail="Not assigned to this job")
     incomplete = [i for i in job.get("checklist", []) if not i.get("done")]
-    if incomplete:
+    if incomplete and job.get("checklist_mandatory", True):
         raise HTTPException(status_code=400, detail=f"{len(incomplete)} checklist items incomplete")
     hours = job.get("estimated_duration", 0)
     checked_in = job.get("checked_in_at")
@@ -1941,6 +1942,14 @@ class ChecklistTemplateIn(BaseModel):
     clean_type: Literal["standard", "deep", "airbnb", "move_out"]
     tasks: List[str]
     photos: List[str]
+    mandatory: bool = True
+
+async def checklist_mandatory_for(clean_type: str, owner_id: Optional[str]) -> bool:
+    if owner_id:
+        t = await db.checklist_templates.find_one({"owner_id": owner_id, "clean_type": clean_type})
+        if t:
+            return bool(t.get("mandatory", True))
+    return True
 
 @api_router.get("/checklist-templates")
 async def list_checklist_templates(user=Depends(get_current_user)):
@@ -1950,10 +1959,10 @@ async def list_checklist_templates(user=Depends(get_current_user)):
     for ct in CLEAN_TYPES:
         t = await db.checklist_templates.find_one({"owner_id": user["user_id"], "clean_type": ct})
         if t:
-            out[ct] = {"tasks": t.get("tasks", []), "photos": t.get("photos", []), "custom": True}
+            out[ct] = {"tasks": t.get("tasks", []), "photos": t.get("photos", []), "mandatory": t.get("mandatory", True), "custom": True}
         else:
             out[ct] = {"tasks": TASK_ITEMS.get(ct, TASK_ITEMS["standard"]),
-                       "photos": DEFAULT_PHOTO_LABELS, "custom": False}
+                       "photos": DEFAULT_PHOTO_LABELS, "mandatory": True, "custom": False}
     return out
 
 @api_router.put("/checklist-templates")
@@ -1967,9 +1976,9 @@ async def save_checklist_template(body: ChecklistTemplateIn, user=Depends(get_cu
     await db.checklist_templates.update_one(
         {"owner_id": user["user_id"], "clean_type": body.clean_type},
         {"$set": {"owner_id": user["user_id"], "clean_type": body.clean_type,
-                  "tasks": tasks, "photos": photos, "updated_at": now_utc()}},
+                  "tasks": tasks, "photos": photos, "mandatory": body.mandatory, "updated_at": now_utc()}},
         upsert=True)
-    return {"ok": True, "clean_type": body.clean_type, "tasks": tasks, "photos": photos}
+    return {"ok": True, "clean_type": body.clean_type, "tasks": tasks, "photos": photos, "mandatory": body.mandatory}
 
 @api_router.delete("/checklist-templates/{clean_type}")
 async def reset_checklist_template(clean_type: str, user=Depends(get_current_user)):
@@ -2018,6 +2027,7 @@ async def public_book_create(owner_id: str, body: PublicBookingIn, request: Requ
         "required_qualifications": [], "pay_rate": 0,
         "status": "pending", "assigned_cleaners": [], "applicants": [],
         "checklist": await build_checklist(body.clean_type, owner_id),
+        "checklist_mandatory": await checklist_mandatory_for(body.clean_type, owner_id),
         "source": "booking_form",
         "checked_in_at": None, "completed_at": None, "logged_hours": 0,
         "created_at": now_utc(),
@@ -2028,6 +2038,22 @@ async def public_book_create(owner_id: str, body: PublicBookingIn, request: Requ
 
 class SmsTestIn(BaseModel):
     to: str
+
+@api_router.post("/admin/reset-sample-data")
+async def reset_sample_data(user=Depends(get_current_user)):
+    if user["role"] not in ("company_owner", "owner_cleaner", "admin"):
+        raise HTTPException(status_code=403, detail="Only owners can clear sample data")
+    jobs_res = await db.jobs.delete_many({"demo": True})
+    await db.hours_log.delete_many({"demo": True})
+    await db.activity.delete_many({"demo": True})
+    try:
+        await db.clients.delete_many({"demo": True})
+    except Exception:
+        pass
+    demo_emails = ["owner@abodeops.com", "cleaner@abodeops.com", "client@abodeops.com"]
+    ppl = await db.users.delete_many({"email": {"$in": demo_emails}, "user_id": {"$ne": user["user_id"]}})
+    await audit(user, "reset_sample_data", f"jobs={jobs_res.deleted_count}, people={ppl.deleted_count}")
+    return {"ok": True, "jobs_removed": jobs_res.deleted_count, "people_removed": ppl.deleted_count}
 
 @api_router.get("/audit-log")
 async def get_audit_log(user=Depends(get_current_user)):
