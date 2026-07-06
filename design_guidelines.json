@@ -1,92 +1,74 @@
 {
   "app_name": "CleanOps",
-  "personality": "1 iOS-Native Clean (Premium B2B SaaS variant - Stripe/Linear vibe)",
-  "personality_one_liner": "A premium, high-trust operations center that feels as precise and polished as the top-tier cleaning services it manages.",
+  "personality": "7 Dark-First Utility DARK",
+  "personality_one_liner": "A high-contrast, tactical command center optimized for rapid field management, glanceable status, and minimal cognitive load.",
   "color": {
-    "surface": "#F8F7F4",
-    "onSurface": "#0A192F",
-    "surfaceSecondary": "#FFFFFF",
-    "onSurfaceSecondary": "#0A192F",
-    "surfaceTertiary": "#F1EFE9",
-    "onSurfaceTertiary": "#0A192F",
-    "surfaceInverse": "#0A192F",
-    "onSurfaceInverse": "#FFFFFF",
+    "surface": "#0E1420",
+    "onSurface": "#EAECEF",
+    "surfaceSecondary": "#182231",
+    "onSurfaceSecondary": "#EAECEF",
+    "surfaceTertiary": "#232F42",
+    "onSurfaceTertiary": "#EAECEF",
+    "surfaceInverse": "#EAECEF",
+    "onSurfaceInverse": "#0E1420",
     "brand": "#1A5F7A",
     "brandPrimary": "#1A5F7A",
     "onBrandPrimary": "#FFFFFF",
-    "brandSecondary": "#D4AF37",
-    "onBrandSecondary": "#0A192F",
-    "brandTertiary": "#E4EEF2",
-    "onBrandTertiary": "#1A5F7A",
-    "success": "#4CAF50",
+    "brandSecondary": "#232F42",
+    "onBrandSecondary": "#EAECEF",
+    "brandTertiary": "#182231",
+    "onBrandTertiary": "#EAECEF",
+    "success": "#2B7043",
     "onSuccess": "#FFFFFF",
-    "warning": "#F5A623",
-    "onWarning": "#FFFFFF",
-    "error": "#D0021B",
+    "warning": "#D4AF37",
+    "onWarning": "#000000",
+    "error": "#D64045",
     "onError": "#FFFFFF",
-    "info": "#4A90E2",
+    "info": "#1A5F7A",
     "onInfo": "#FFFFFF",
-    "border": "rgba(10, 25, 47, 0.08)",
-    "borderStrong": "rgba(10, 25, 47, 0.15)",
-    "divider": "rgba(10, 25, 47, 0.06)"
+    "border": "#2C3849",
+    "borderStrong": "#4A5A75",
+    "divider": "#2C3849",
+    "muted": "#9AA5B4"
   },
   "typography": {
-    "displayFontFamily": "Inter",
+    "displayFontFamily": "Barlow Condensed",
     "textFontFamily": "Inter",
     "scale": {
-      "sm": 13,
-      "base": 15,
-      "lg": 17,
-      "xl": 22,
-      "2xl": 28
-    },
-    "guidance": "Max weight 500. Use 17px/400 for highly readable body text (Linear standard). Use slightly negative tracking for 2xl display text to match Stripe's premium feel."
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
   },
   "spacing": {
-    "rule": "Linear/Stripe 8pt scale with generous card padding. Avoid dense clustering.",
-    "xs": 8,
-    "sm": 12,
-    "md": 16,
-    "lg": 24,
-    "xl": 32,
-    "2xl": 40,
-    "3xl": 48
-  },
-  "radius_tokens": {
+    "rule": "Dense but glanceable. Tightly group related metadata but use 'md'/'lg' padding for separation between modules. Touch targets must be minimum 44pt.",
+    "xs": 4,
     "sm": 8,
     "md": 12,
     "lg": 16,
-    "pill": 999,
-    "guidance": "md (12px) is the standard for all cards. sm (8px) for small buttons/inputs."
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
   },
-  "shadow_tier": 1,
-  "shadow_specs": {
-    "web": "0px 4px 16px rgba(10, 25, 47, 0.04), 0px 1px 2px rgba(10, 25, 47, 0.02)",
-    "native": "shadowColor: '#0A192F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 16, elevation: 2"
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
   },
-  "navigation": "bottom_tabs",
-  "icon_set": "Ionicons",
-  "icon_sizing": {
-    "inline": 16,
-    "nav_bar": 24,
-    "card_hero": 24,
-    "empty_state": 48
-  },
+  "shadow_tier": "0",
+  "navigation": "stack_only",
+  "icon_set": "Feather",
   "glassmorphism": {
-    "enabled": true,
-    "do's": [
-      "Use for the sticky Driver Mode active offer banner",
-      "Use for bottom tab bar background to prevent hard cut-offs",
-      "Use for the sticky bottom action bar on Job Details"
-    ],
-    "dont's": [
-      "Do not use on standard feed cards or metric tiles",
-      "Do not use on forms or dense data tables"
-    ]
+    "enabled": false,
+    "do's": ["Use solid colors (surfaceSecondary/surfaceTertiary) to maintain contrast and utility."],
+    "dont's": ["No blur. Field service operations need stark contrast and zero rendering lag."]
   },
   "platform_libraries": {
     "glass": {
-      "ios": "expo-glass-effect",
+      "ios": "expo-blur",
       "android": "expo-blur",
       "low_end_android_fallback": "solid surfaceSecondary"
     },
@@ -98,57 +80,50 @@
   },
   "screens": [
     {
-      "name": "Jobs Marketplace Feed",
-      "purpose": "Discover and grab available cleaning jobs quickly.",
+      "name": "Command Center",
+      "purpose": "A live operations hub for the owner to monitor all jobs, glance at statuses, and access Ops management tools.",
       "states": {
-        "loading": "Skeleton cards mimicking exact layout, sliding shimmer effect.",
-        "empty": "Illustration of a clipboard/map, 'No jobs in your area', 'Check back later or expand your radius.', Button: 'Update Preferences'",
-        "error": "Cannot load jobs. 'Retry Connection' CTA."
+        "loading": "Skeleton rows indicating live data feed loading.",
+        "empty": "No active jobs. Icon (Feather 'check-circle'), text 'All quiet on the front. No active jobs.', button 'Create Job'.",
+        "error": "Failed to load feed. Button 'Retry Connection'."
       },
-      "layout": "Reduce text density on cards: Remove labels (e.g., instead of 'Date: Oct 12', just show 'Oct 12' in bolder text next to a calendar icon). 1 primary price metric right-aligned. Use spacing.lg (24px) for internal card padding."
-    },
-    {
-      "name": "Operations Command Center",
-      "purpose": "High-level overview of metrics and live crew activity.",
-      "states": {
-        "loading": "Metric tiles skeleton with faint pulse.",
-        "empty": "Illustration of an operations desk. 'Your command center is ready.', 'Invite your first employee to see live stats.', Button: 'Invite Team Member'",
-        "error": "Failed to fetch metrics. 'Refresh Data' CTA."
-      },
-      "layout": "2-column grid for metrics (gap: 16px). Only 1 primary number per card (28px), 1 comparison metric (13px, secondary color). No heavy text explanations. Live activity feed uses infinite scroll below metrics."
+      "layout": "1. Header: 'Ops Hub' title. Row of 3 metric tiles (Active, Unassigned, Pending Payroll) using surfaceSecondary, big Barlow Condensed numbers.\n2. Scrollable List of Job Cards. Each card (surfaceSecondary, md radius, border): \n- Top row: Status Tag (pill, e.g. 'In Progress' in brandPrimary/success), Time window.\n- Middle: Client name (lg text), Location (sm text, muted).\n- Bottom row: Row of avatar initials for assigned cleaners, 'Manage' ghost button.\n3. Floating Action Button or Bottom sticky rail for Ops Management Tools (Booking, Templates, SMS, Payroll)."
     },
     {
       "name": "Job Detail",
-      "purpose": "Deep dive into a specific job and process its workflow.",
+      "purpose": "Command view of a specific job allowing the owner to track progress, view checklist, and directly manage the assigned crew.",
       "states": {
-        "loading": "Skeleton rows mimicking job metadata.",
-        "empty": "Not applicable (detail screen).",
-        "error": "Job not found or removed. 'Back to Jobs' CTA."
+        "loading": "Spinner centered.",
+        "empty": "N/A",
+        "error": "Failed to load job details. Button 'Retry'."
       },
-      "layout": "Sticky primary action button anchored at the bottom with a glass background. Group metadata into visual blocks (Location, Client, Checklist) separated by subtle dividers (1px divider, not cards inside cards)."
+      "layout": "1. Banner/Header: Property image with top-to-bottom gradient scrim (transparent to surface). Job Title overlaid at bottom left, Status pill at top right.\n2. Location & Time Card: surfaceSecondary, md padding. Address, Date, Time.\n3. Crew Roster Section: 'Assigned Crew' header. List of row items (surfaceSecondary, sm margin-bottom). Each row: Avatar, Name, Status (e.g., 'Working', 'Not Checked In'). Right side of row: 'Manage' button (opens bottom sheet). Below roster, an 'Assign Cleaner' button (dashed border, centered text).\n4. Checklist Section: Row items with checkboxes, photo requirement indicator (Feather 'camera' icon).\n5. Sticky Bottom Action: 'Start Job' or 'Complete Job' (brandPrimary background, full width, lg padding) sitting above safe area."
     }
   ],
-  "animations": {
-    "guidance": "Subtle, Stripe-like transitions. Everything should feel instant but smooth.",
-    "list_entrance": "react-native-reanimated FadeInUp with 300ms duration, subtle spring.",
-    "press_scale": "Scale down to 0.97 on press (buttons and cards).",
-    "skeleton": "Smooth, slow opacity pulse (not aggressive left-to-right shimmers)."
+  "components": {
+    "ManageCleanerBottomSheet": {
+      "purpose": "Forgiving interface to remove a cleaner or adjust their hours without leaving the context of the job.",
+      "layout": "Use @gorhom/bottom-sheet. Background: surfaceSecondary.\n1. Header: Cleaner Name, Avatar, and close icon ('x').\n2. Action Row (Segmented Control style): Two tabs - 'Adjust Time' and 'Remove'.\n3. Adjust Time View: Two input rows (Start Time, End Time) with time pickers, or a 'Total Hours' numeric input field (large typography). 'Save Adjustments' CTA (gold/warning if modifying past data).\n4. Remove View: Text 'Why are you removing this cleaner?'. Radio group (Feather 'circle'/'check-circle'): 'Added by mistake', 'Called in sick', 'No-show'. 'Confirm Removal' CTA (error red background).\nTouch targets must be massive (48pt) for easy tapping."
+    }
   },
   "images": {
-    "command_center_hero": {
-      "url": "https://images.unsplash.com/photo-1638191490002-731b813e8a72?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzB8MHwxfHNlYXJjaHwxfHxjbGVhbiUyMG1vZGVybiUyMGFic3RyYWN0JTIwYmFja2dyb3VuZHxlbnwwfHx8dGVhbHwxNzgyNzI3NTkxfDA&ixlib=rb-4.1.0&q=85",
-      "alt": "Clean modern abstract background"
+    "job_banner_1": {
+      "url": "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBob3VzZSUyMGV4dGVyaW9yfGVufDB8fHx8MTc4MzM0NDQyNHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Modern house exterior serving as property banner"
     },
-    "profile_avatar_fallback": {
-      "url": "https://images.unsplash.com/photo-1650184706537-4f350d952cb4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwyfHxjbGVhbmluZyUyMHNlcnZpY2UlMjBwcm9mZXNzaW9uYWx8ZW58MHx8fHRlYWx8MTc4MjcyNzU3MHww&ixlib=rb-4.1.0&q=85",
-      "alt": "Cleaning professional"
+    "cleaner_avatar_1": {
+      "url": "https://images.unsplash.com/photo-1607746882042-944635dfe10e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NjV8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBmZW1hbGUlMjBoZWFkc2hvdCUyMGluJTIwdW5pZm9ybXxlbnwwfHx8fDE3ODMzNDQ0MzJ8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Professional cleaner portrait"
     }
   },
   "instructions_to_main_agent": [
-    "Strictly follow the Stripe/Linear token spacing and font hierarchy to achieve the premium feel. Use the provided shadow specs (boxShadow for web, elevation/shadow for native).",
-    "Card Density Fix: Strip out all explicit labels ('Price:', 'Address:', 'Date:'). Use layout and iconography to imply meaning. Limit to one primary metric per card.",
-    "Use react-native-reanimated for a universal 0.97 press scale on all interactive cards and primary buttons.",
-    "Implement the standardized empty state pattern (Icon -> 17px Title -> 13px Subtext -> Primary CTA) in a reusable component and deploy it across the requested screens.",
-    "Ensure the sticky CTA at the bottom of the Job Detail and Driver Mode uses the glassmorphism specs to float gracefully above scrolling content."
+    "Strictly adhere to the provided user dark palette. Do NOT use default system blues or purples. Muted text should use #9AA5B4.",
+    "Implement the Command Center and Job Detail screens using clean React Native primitives (View, Text, ScrollView, Pressable).",
+    "Implement the 'ManageCleanerBottomSheet' as a highly accessible action sheet using @gorhom/bottom-sheet. Ensure the 'Remove' flow features a clear reason-selection radio group, and the 'Adjust Time' flow features oversized inputs for hours.",
+    "Use 'Barlow Condensed' for numbers/metrics (if available via Expo, otherwise use a fallback condensed font like 'Oswald' or default to uppercase Inter with tighter tracking) and 'Inter' for body.",
+    "Borders should be hairline (1pt) using the 'border' (#2C3849) token. Ensure high contrast separation instead of shadows.",
+    "When displaying the 'Job Detail' banner image, apply the mandatory top-to-bottom gradient scrim (transparent -> surface #0E1420) so the text overlay remains perfectly legible.",
+    "In the Crew Roster list, ensure the 'Manage' button on each cleaner row has a large touch target (hitSlop or minimum 44x44pt) to prevent mis-taps in the field.",
+    "Ensure 'Start Job' / 'Complete Job' sticky bottom CTA floats securely above the iOS Home Indicator and never gets obscured by scrolling content."
   ]
 }

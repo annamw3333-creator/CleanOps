@@ -14,7 +14,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Show cleaning jobs near you while online"
-      }
+      },
+      "bundleIdentifier": "com.emergent.qualifiedcleaners.o0d27x"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +23,11 @@
         "backgroundColor": "#1A5F7A"
       },
       "edgeToEdgeEnabled": true,
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "package": "app.emergent.cleanops7f747ca7"
     },
     "web": {
       "bundler": "metro",
