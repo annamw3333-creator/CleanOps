@@ -77,8 +77,10 @@ export default function Driver() {
         await api.post("/driver/status", { online: false });
         setOnline(false);
       }
-    } catch (e: any) { Alert.alert("Error", e.message || "Could not update status"); }
-    finally { setWorking(false); }
+   catch (e: unknown) { 
+  const message = e instanceof Error ? e.message : "Could not update status";
+  Alert.alert("Error", message); 
+}
   };
 
   const accept = async (job: any) => {
