@@ -7,8 +7,9 @@ from server import hash_password, build_checklist
 load_dotenv(".env")
 db = AsyncIOMotorClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
 
-PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+PNG = "data:image/png;base64,iVBORw0KGgoAAAAnsUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+DEMO_PASSWORD = "CleanOps123!"
 
 
 async def upsert_user(email, name, role, **extra):
@@ -16,7 +17,7 @@ async def upsert_user(email, name, role, **extra):
     uid = existing["user_id"] if existing else f"user_{uuid.uuid4().hex[:12]}"
     doc = {
         "user_id": uid, "email": email, "name": name, "role": role,
-        "password_hash": hash_password("pass123"), "tier": "free",
+        "password_hash": hash_password(DEMO_PASSWORD), "tier": "free",
         "created_at": existing["created_at"] if existing else datetime.now(timezone.utc) - timedelta(days=120),
         **extra,
     }
@@ -25,14 +26,14 @@ async def upsert_user(email, name, role, **extra):
 
 
 async def main():
-    owner = await upsert_user("owner@abodeops.com", "Olivia Owner", "company_owner", phone="403-555-0100")
-    client = await upsert_user("client@abodeops.com", "Carl Client", "client", phone="403-555-0200")
+    owner = await upsert_user("owner@cleanops.demo", "Alex Rivera", "company_owner", phone="403-555-0100")
+    client = await upsert_user("client@cleanops.demo", "Sam Patel", "client", phone="403-555-0200")
     cleaner = await upsert_user(
-        "cleaner@abodeops.com", "Casey Cleaner", "cleaner",
+        "cleaner@cleanops.demo", "Jordan Hale", "cleaner",
         phone="403-555-0300",
         qualifications=["Background Checked", "Insured"],
         hourly_rate=30, auto_accept=False,
-        experience_summary="5 years of residential & Airbnb turnover cleaning across Calgary.",
+        experience_summary="5 years of residential and short-term rental turnover cleaning across Calgary.",
         portfolio=[PNG] * 12, availability=DAYS[:],
         availability_schedule={
             "Mon": {"mode": "all"}, "Tue": {"mode": "all"}, "Wed": {"mode": "all"},
@@ -42,17 +43,15 @@ async def main():
         },
     )
 
-    # Clear previous demo jobs
     await db.jobs.delete_many({"demo": True})
 
     today = datetime.now(timezone.utc)
-    base_lat, base_lng = 51.0447, -114.0719  # Calgary downtown
     std_checklist = await build_checklist("standard")
 
     def mk_job(i, title, client_name, lat, lng, status, assigned, days_offset):
         d = (today + timedelta(days=days_offset)).strftime("%Y-%m-%d")
         return {
-            "job_id": f"demojob_{i}", "demo": True, "poster_id": owner, "poster_name": "Olivia Owner",
+            "job_id": f"demojob_{i}", "demo": True, "poster_id": owner, "poster_name": "Alex Rivera",
             "poster_role": "company_owner", "title": title, "clean_type": "standard",
             "address": f"{100+i} 8 Ave SW, Calgary, AB", "latitude": lat, "longitude": lng,
             "date": d, "start_window_from": "09:00", "start_window_to": "11:00",
@@ -75,7 +74,6 @@ async def main():
     ]
     await db.jobs.insert_many(jobs)
 
-    # log hours for completed jobs (for earnings)
     await db.hours_log.delete_many({"demo": True})
     await db.hours_log.insert_many([
         {"demo": True, "log_id": f"demolog_{i}", "cleaner_id": cleaner, "job_id": j["job_id"],
@@ -83,13 +81,12 @@ async def main():
         for i, j in enumerate([jobs[3], jobs[4]])
     ])
 
-    # seed activity feed for the owner
     await db.activity.delete_many({"demo": True})
     feed = [
-        ("completed", "Condo refresh completed by Casey Cleaner", jobs[4]),
+        ("completed", "Condo refresh completed by Jordan Hale", jobs[4]),
         ("addon", "Oven add-on requested for Move-out deep clean", jobs[3]),
-        ("arrived", "Casey Cleaner arrived on site at Move-out deep clean", jobs[3]),
-        ("enroute", "Casey Cleaner is on the way to Move-out deep clean", jobs[3]),
+        ("arrived", "Jordan Hale arrived on site at Move-out deep clean", jobs[3]),
+        ("enroute", "Jordan Hale is on the way to Move-out deep clean", jobs[3]),
         ("created", "New job posted: Weekly clean - Riverbend", jobs[0]),
     ]
     await db.activity.insert_many([
@@ -98,7 +95,7 @@ async def main():
         for i, (kind, text, j) in enumerate(feed)
     ])
 
-    print("Seeded: owner@abodeops.com / cleaner@abodeops.com / client@abodeops.com (pass123)")
+    print("Seeded: owner@cleanops.demo / cleaner@cleanops.demo / client@cleanops.demo (CleanOps123!)")
     print(f"owner={owner} cleaner={cleaner} client={client}")
 
 

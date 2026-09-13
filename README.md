@@ -38,9 +38,9 @@ python seed_demo.py
 
 | Role | Email | Password |
 |---|---|---|
-| Company owner | owner@abodeops.com | pass123 |
-| Cleaner | cleaner@abodeops.com | pass123 |
-| Client | client@abodeops.com | pass123 |
+| Company owner | owner@cleanops.demo | CleanOps123! |
+| Cleaner | cleaner@cleanops.demo | CleanOps123! |
+| Client | client@cleanops.demo | CleanOps123! |
 
 ## 2. Frontend
 
