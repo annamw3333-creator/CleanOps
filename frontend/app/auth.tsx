@@ -42,7 +42,10 @@ export default function Auth() {
   const google = async () => {
     setError(""); setLoading(true);
     try { await loginWithGoogle(role); router.replace("/(tabs)"); }
-    catch (e: any) { setError(e.message || "Google sign-in failed"); }
+    catch (e: unknown) { 
+  const message = e instanceof Error ? e.message : "Google sign-in failed";
+  setError(message); 
+}
     finally { setLoading(false); }
   };
 
