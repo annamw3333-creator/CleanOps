@@ -1,92 +1,99 @@
 # CleanOps
 
-Operations hub for cleaning companies, cleaners, homeowners, and landlords.
-Expo / React Native frontend + FastAPI backend + MongoDB.
+**Multi-tenant field service ops** for cleaning companies — jobs, teams, live location, checklists, and payroll estimates in one Expo + FastAPI stack.
 
-## What you need
+Live: [clean0ps.com](https://clean0ps.com) · App: [app.clean0ps.com](https://app.clean0ps.com)  
+Portfolio: [annabuildsai.com](https://annabuildsai.com)
 
-- Node.js 20+ and Yarn 1.22 (the frontend pins `yarn@1.22.22`)
+Built by Anna Walker while running **Aesthetic Abodes** (Calgary-area cleaning) — CleanOps is the ops layer that grew out of that day-to-day work, not a generic template.
+
+## Stack
+
+| Layer | Tech |
+|-------|------|
+| Mobile / web | **Expo Router** + React Native (`frontend/`) |
+| API | **FastAPI** + Motor (`backend/server.py`) |
+| Data | **MongoDB** |
+| Optional | Stripe (subscriptions), Twilio (SMS), Resend (email) |
+
+## Features (in this repo)
+
+Honest to the current codebase:
+
+- **Jobs & dispatch** — create, assign, grab/apply, status, check-in / complete, add-ons
+- **Live location** — en-route + location pings; fleet live map for posters (`/fleet/live`, Live Map screen)
+- **Teams & clients** — company teams, cleaner profiles, client notes
+- **Checklists & photo QA** — clean-type templates, task + photo items on jobs
+- **Availability** — day windows / schedule on cleaner profiles
+- **Payroll helpers** — province tax tables + `POST /api/payroll/calculate`; ops reconcile for hours owed
+- **Driver / marketplace slice** — offers, earnings, decline flows for independent cleaners
+- **Billing** — Stripe Checkout for plan upgrades (no-ops without keys)
+- **SMS** — Twilio hooks when configured; skipped cleanly when not
+- **Public booking / feedback** — tokenized public book + feedback links
+
+Optional integrations are env-gated — missing Stripe/Twilio/Resend keys disable those paths rather than crashing.
+
+## Quick start
+
+### Requirements
+
+- Node.js 20+ and Yarn 1.22
 - Python 3.11+
-- MongoDB 6+ running locally (or a MongoDB Atlas URI)
+- MongoDB 6+ (local or Atlas)
 
-Optional (features no-op without them):
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+# set MONGO_URL, DB_NAME; leave Stripe/Twilio empty for local core flows
+```
 
-- Stripe keys — subscriptions / checkout
-- Twilio — SMS
-- Resend — email
-
-## 1. Backend
+### Backend
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # then edit MONGO_URL / DB_NAME
 uvicorn server:app --reload --host 0.0.0.0 --port 8000
 ```
 
-API lives at `http://localhost:8000/api`.
-Docs: `http://localhost:8000/docs`.
+- API: `http://localhost:8000/api`
+- Docs: `http://localhost:8000/docs`
 
-Seed demo users (Calgary sample jobs):
+Seed Calgary demo users:
 
 ```bash
-cd backend
-python seed_demo.py
+cd backend && python seed_demo.py
 ```
 
 | Role | Email | Password |
-|---|---|---|
+|------|-------|----------|
 | Company owner | owner@cleanops.demo | CleanOps123! |
 | Cleaner | cleaner@cleanops.demo | CleanOps123! |
 | Client | client@cleanops.demo | CleanOps123! |
 
-## 2. Frontend
+### Frontend
 
 ```bash
 cd frontend
-cp .env.example .env
 yarn install
 yarn start
 ```
 
-Then:
-
-- press `w` for web
-- scan the QR code with Expo Go on a phone (same Wi-Fi)
-- `yarn ios` / `yarn android` if you have simulators
-
-`EXPO_PUBLIC_BACKEND_URL` must be reachable from the device. On a physical phone use your computer's LAN IP, not `localhost`:
-
-```
-EXPO_PUBLIC_BACKEND_URL=http://192.168.1.10:8000
-```
-
-## 3. Tests
-
-Backend tests hit a **running** API (they are HTTP integration tests, not in-process).
-
-```bash
-cd backend
-export EXPO_PUBLIC_BACKEND_URL=http://localhost:8000
-export MONGO_URL=mongodb://localhost:27017
-export DB_NAME=cleanops
-pytest -q
-```
-
-Stripe checkout tests expect a test-mode `STRIPE_API_KEY` in `backend/.env`.
+Set `EXPO_PUBLIC_BACKEND_URL` to a host the device can reach (LAN IP on a phone — not `localhost`).
 
 ## Repo layout
 
 ```
-backend/          FastAPI app (server.py), seed, pytest
-frontend/         Expo Router app (app/), shared UI (src/)
-design_guidelines.json
+backend/     FastAPI app (server.py), seed_demo.py, pytest
+frontend/    Expo Router app (app/), shared UI (src/)
 ```
 
 ## Notes
 
-- SMS and email are skipped cleanly when Twilio / Resend keys are missing.
-- There is an older snapshot repo `CleanOps070626`; this repo is the current app.
-- Open PR #1 adds a Deno workflow that does not match this stack. Prefer the Python/Expo commands above.
+- An older Emergent export lives in a **private archived** repo (`CleanOps070626`) — this repo is the public, hire-facing app.
+- Keep secrets in `.env` only (gitignored). Never commit API keys.
+- WordPress marketing plugin zip (if present elsewhere) is optional; core product is the Expo + FastAPI app.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
